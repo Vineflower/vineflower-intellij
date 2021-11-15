@@ -1,4 +1,4 @@
-package com.github.earthcomputer.quiltflowerintellijplugin
+package net.earthcomputer.quiltflowerintellij
 
 import com.intellij.ide.highlighter.XmlFileType
 import com.intellij.psi.xml.XmlFile
