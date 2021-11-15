@@ -14,5 +14,6 @@
                 id="net.earthcomputer.quiltflowerintellij.QuiltflowerSettings"
                 displayName="Quiltflower Settings"/>
         <applicationService serviceImplementation="net.earthcomputer.quiltflowerintellij.QuiltflowerState"/>
+        <preloadingActivity implementation="net.earthcomputer.quiltflowerintellij.QuiltflowerPreloadingActivity"/>
     </extensions>
 </idea-plugin>

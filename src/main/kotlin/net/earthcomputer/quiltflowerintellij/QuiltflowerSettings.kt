@@ -22,6 +22,7 @@ class QuiltflowerSettings : SearchableConfigurable {
     }
 
     private var panel: MyPanel? = null
+    private var prevQuiltflowerVersion: SemVer? = null
 
     override fun createComponent(): JComponent {
         return MyPanel().also { panel = it }
@@ -33,7 +34,7 @@ class QuiltflowerSettings : SearchableConfigurable {
         return panel.myEnabled.isSelected != state.enabled
                 || panel.myAutoUpdate.isSelected != state.autoUpdate
                 || panel.myEnableSnapshots.isSelected != state.enableSnapshots
-                || panel.myQuiltflowerVersion.selectedItem != state.quiltflowerVersion
+                || panel.myQuiltflowerVersion.selectedItem != state.quiltflowerVersionStr
     }
 
     override fun reset() {
@@ -42,8 +43,9 @@ class QuiltflowerSettings : SearchableConfigurable {
         panel.myEnabled.isSelected = state.enabled
         panel.myAutoUpdate.isSelected = state.autoUpdate
         panel.myEnableSnapshots.isSelected = state.enableSnapshots
-        panel.myQuiltflowerVersion.selectedItem = state.quiltflowerVersion
+        panel.myQuiltflowerVersion.selectedItem = state.quiltflowerVersionStr
         panel.myQuiltflowerVersion.isEnabled = !state.autoUpdate
+        prevQuiltflowerVersion = state.quiltflowerVersion
     }
 
     override fun apply() {
@@ -53,6 +55,20 @@ class QuiltflowerSettings : SearchableConfigurable {
         state.autoUpdate = panel.myAutoUpdate.isSelected
         state.enableSnapshots = panel.myEnableSnapshots.isSelected
         state.quiltflowerVersion = panel.myQuiltflowerVersion.selectedItem as SemVer?
+        if (state.quiltflowerVersion != prevQuiltflowerVersion) {
+            state.downloadedQuiltflower = null
+            val prevQuiltflowerVersion = state.quiltflowerVersionStr
+            state.downloadQuiltflower({ quiltflowerJar ->
+                ApplicationManager.getApplication().invokeLater {
+                    state.isDownloadingQuiltflower = false
+                    if (state.quiltflowerVersionStr == prevQuiltflowerVersion) {
+                        state.downloadedQuiltflower = quiltflowerJar
+                    }
+                }
+            }) {
+                state.isDownloadingQuiltflower = false
+            }
+        }
     }
 
     override fun disposeUIResources() {
@@ -118,7 +134,7 @@ class QuiltflowerSettings : SearchableConfigurable {
                         myQuiltflowerVersion.selectedItem = if (myEnableSnapshots.isSelected) latestSnapshot else latestRelease
                     }
                     else -> {
-                        myQuiltflowerVersion.selectedItem = QuiltflowerState.getInstance().quiltflowerVersion
+                        myQuiltflowerVersion.selectedItem = QuiltflowerState.getInstance().quiltflowerVersionStr
                     }
                 }
             }
