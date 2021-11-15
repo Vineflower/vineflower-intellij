@@ -38,6 +38,8 @@ class QuiltflowerState : PersistentStateComponent<QuiltflowerState> {
     var releaseBaseUrl: String = "https://maven.quiltmc.org/repository/release/org/quiltmc/quiltflower/"
     @JvmField
     var snapshotsBaseUrl: String = "https://maven.quiltmc.org/repository/snapshot/org/quiltmc/quiltflower/"
+    @JvmField
+    var quiltflowerSettings: MutableMap<String, String> = mutableMapOf()
 
     @Transient
     @JvmField

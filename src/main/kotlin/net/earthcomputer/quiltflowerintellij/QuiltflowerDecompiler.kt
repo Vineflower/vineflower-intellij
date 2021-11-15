@@ -1,9 +1,7 @@
 package net.earthcomputer.quiltflowerintellij
 
-import com.intellij.application.options.CodeStyle
 import com.intellij.execution.filters.LineNumbersMapping
 import com.intellij.ide.highlighter.JavaClassFileType
-import com.intellij.ide.highlighter.JavaFileType
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.fileEditor.impl.LoadTextUtil
@@ -22,19 +20,6 @@ import java.util.function.Consumer
 class QuiltflowerDecompiler : ClassFileDecompilers.Light() {
     companion object {
         private val LOGGER = logger<QuiltflowerDecompiler>()
-        private val DEFAULT_OPTIONS = mapOf(
-            "hdc" to "0", // hide default constructor
-            "dgs" to "1", // decompile generic signatures
-            "rsy" to "1", // remove synthetic
-            "rbr" to "1", // remove bridge
-            "lit" to "1", // literals as-is
-            "nls" to "1", // newline separator
-            "ban" to "//\n// Source code recreated from a .class file by Quiltflower\n//\n\n", // banner
-            "mpm" to 60, // max processing method
-            "iib" to "1", // ignore invalid bytecode
-            "vac" to "1", // verify anonymous classes
-            "__unit_test_mode__" to if (ApplicationManager.getApplication().isUnitTestMode) "1" else "0"
-        )
     }
 
     override fun accepts(file: VirtualFile): Boolean {
@@ -84,8 +69,12 @@ class QuiltflowerDecompiler : ClassFileDecompilers.Light() {
                     Consumer<Throwable> { throw ProcessCanceledException(it) }
                 )
 
-                val options = DEFAULT_OPTIONS.toMutableMap()
-                options["ind"] = " ".repeat(CodeStyle.getDefaultSettings().getIndentOptions(JavaFileType.INSTANCE).INDENT_SIZE)
+                val options = QuiltflowerState.getInstance().quiltflowerSettings.toMutableMap()
+                options.keys.removeAll(QuiltflowerPreferences.ignoredPreferences)
+                for ((k, v) in QuiltflowerPreferences.defaultOverrides) {
+                    options.putIfAbsent(k, v.toString())
+                }
+                options.compute("ind") { _, v -> if (v == null) null else " ".repeat(v.toInt()) } // indent
                 if (Registry.`is`("decompiler.use.line.mapping")) {
                     options["bsm"] = "1" // bytecode source mapping
                 }
