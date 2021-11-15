@@ -56,18 +56,7 @@ class QuiltflowerSettings : SearchableConfigurable {
         state.enableSnapshots = panel.myEnableSnapshots.isSelected
         state.quiltflowerVersion = panel.myQuiltflowerVersion.selectedItem as SemVer?
         if (state.quiltflowerVersion != prevQuiltflowerVersion) {
-            state.downloadedQuiltflower = null
-            val prevQuiltflowerVersion = state.quiltflowerVersionStr
-            state.downloadQuiltflower({ quiltflowerJar ->
-                ApplicationManager.getApplication().invokeLater {
-                    state.isDownloadingQuiltflower = false
-                    if (state.quiltflowerVersionStr == prevQuiltflowerVersion) {
-                        state.downloadedQuiltflower = quiltflowerJar
-                    }
-                }
-            }) {
-                state.isDownloadingQuiltflower = false
-            }
+            state.downloadQuiltflower()
         }
     }
 
