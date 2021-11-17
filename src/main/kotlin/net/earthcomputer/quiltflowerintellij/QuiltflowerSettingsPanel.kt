@@ -179,7 +179,7 @@ class QuiltflowerSettingsPanel(var prevQuiltflowerVersion: SemVer?) {
                     quiltflowerVersionComboBox.selectedItem = if (enableSnapshotsCheckbox.isSelected) latestSnapshot else latestRelease
                 }
                 else -> {
-                    quiltflowerVersionComboBox.selectedItem = QuiltflowerState.getInstance().quiltflowerVersionStr
+                    quiltflowerVersionComboBox.selectedItem = QuiltflowerState.getInstance().quiltflowerVersion
                 }
             }
         }
