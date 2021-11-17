@@ -15,6 +15,7 @@ import com.intellij.util.xmlb.annotations.Transient
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLClassLoader
+import java.net.UnknownHostException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
@@ -43,7 +44,7 @@ class QuiltflowerState : PersistentStateComponent<QuiltflowerState> {
 
     @Transient
     @JvmField
-    var quiltflowerVersions: QuiltflowerVersions? = null
+    var quiltflowerVersionsFuture: CompletableFuture<QuiltflowerVersions> = downloadQuiltflowerVersions()
     @Transient
     @JvmField
     var hadError = false
@@ -60,28 +61,12 @@ class QuiltflowerState : PersistentStateComponent<QuiltflowerState> {
         }
 
     fun initialize() {
-        val earlyFuture = CompletableFuture<Path>()
-        downloadedQuiltflowerFuture = earlyFuture
-        reloadQuiltflowerVersions({ quiltflowerVersions ->
-            this.quiltflowerVersions = quiltflowerVersions
-            if (autoUpdate) {
-                quiltflowerVersion = if (enableSnapshots) {
-                    quiltflowerVersions.latestSnapshot
-                } else {
-                    quiltflowerVersions.latestRelease
-                }
+        downloadQuiltflower().whenComplete { path, error ->
+            if (error != null) {
+                LOGGER.error("Failed to download Quiltflower", error)
+            } else {
+                LOGGER.info("Successfully downloaded Quiltflower to $path")
             }
-            downloadQuiltflower().whenComplete { path, t ->
-                if (t != null) {
-                    earlyFuture.completeExceptionally(t)
-                } else {
-                    earlyFuture.complete(path)
-                }
-            }
-        }) {
-            LOGGER.error("Failed to load Quiltflower versions", it)
-            hadError = true
-            downloadedQuiltflowerFuture?.completeExceptionally(Throwable())
         }
     }
 
@@ -111,60 +96,154 @@ class QuiltflowerState : PersistentStateComponent<QuiltflowerState> {
     }
 
     fun downloadQuiltflower(): CompletableFuture<Path> {
-        val future = CompletableFuture<Path>()
         val oldClassLoader = this.quiltflowerClassLoaderFuture
         this.quiltflowerClassLoaderFuture = null
         oldClassLoader?.whenComplete() { loader, _ -> loader.close() }
-        this.downloadedQuiltflowerFuture = future
-        this.hadError = false
-        runOnBackgroundThreadWithProgress("Downloading Quiltflower") download@{
-            val version = quiltflowerVersion
-            val allVersions = quiltflowerVersions
-            if (version == null || allVersions == null) {
-                hadError = true
-                future.completeExceptionally(Throwable())
-                return@download
+        synchronized(quiltflowerVersionsFuture) {
+            if (downloadedQuiltflowerFuture != null) {
+                return downloadedQuiltflowerFuture!!
             }
-            val jarsDir = PathManager.getConfigDir().resolve("quiltflower").resolve("jars")
-            val jarFile = jarsDir.resolve("quiltflower-$version.jar")
-            val etagFile = jarsDir.resolve("quiltflower-$version.etag")
-            val etag = if (jarFile.exists() && etagFile.exists()) etagFile.readText() else null
-            val urlStr = if (version in allVersions.allReleases) {
-                "$releaseBaseUrl$version/quiltflower-$version.jar"
-            } else {
-                val snapshotVersion = version.toString().substringBefore("-") + "-SNAPSHOT"
-                "$snapshotsBaseUrl$snapshotVersion/quiltflower-$version.jar"
+            this.hadError = false
+            val future = quiltflowerVersionsFuture.thenCompose { quiltflowerVersions ->
+                val future = CompletableFuture<Path>()
+                runOnBackgroundThreadWithProgress("Downloading Quiltflower") download@{
+                    val version = quiltflowerVersion
+                    if (version == null) {
+                        hadError = true
+                        future.completeExceptionally(Throwable())
+                        return@download
+                    }
+                    val jarsDir = PathManager.getConfigDir().resolve("quiltflower").resolve("jars")
+                    val jarFile = jarsDir.resolve("quiltflower-$version.jar")
+                    val etagFile = jarsDir.resolve("quiltflower-$version.etag")
+                    val etag = if (jarFile.exists() && etagFile.exists()) etagFile.readText() else null
+                    val urlStr = if (version in quiltflowerVersions.allReleases) {
+                        "$releaseBaseUrl$version/quiltflower-$version.jar"
+                    } else {
+                        val snapshotVersion = version.toString().substringBefore("-") + "-SNAPSHOT"
+                        "$snapshotsBaseUrl$snapshotVersion/quiltflower-$version.jar"
+                    }
+                    val connection = URL(urlStr).openConnection() as HttpURLConnection
+                    if (etag != null) {
+                        connection.setRequestProperty("If-None-Match", etag)
+                    }
+                    connection.setRequestProperty("User-Agent", "Quiltflower IntelliJ Plugin")
+                    try {
+                        connection.connect()
+                    } catch (e: UnknownHostException) {
+                        if (jarFile.exists()) {
+                            LOGGER.info("Unknown host, we're probably offline, assume jar is ok")
+                            future.complete(jarFile)
+                            return@download
+                        }
+                        throw e
+                    }
+                    val responseCode = connection.responseCode
+                    if (responseCode == HttpURLConnection.HTTP_NOT_MODIFIED) {
+                        LOGGER.info("Quiltflower $version already downloaded")
+                        future.complete(jarFile)
+                        return@download
+                    }
+                    if (responseCode != HttpURLConnection.HTTP_OK) {
+                        LOGGER.error("Failed to download quiltflower $version from $urlStr: $responseCode")
+                        hadError = true
+                        future.completeExceptionally(Throwable())
+                        return@download
+                    }
+                    if (!Files.exists(jarFile.parent)) {
+                        Files.createDirectories(jarFile.parent)
+                    }
+                    connection.inputStream.use {
+                        Files.copy(it, jarFile, StandardCopyOption.REPLACE_EXISTING)
+                    }
+                    val newEtag = connection.getHeaderField("ETag")
+                    if (newEtag != null) {
+                        Files.writeString(etagFile, newEtag, StandardOpenOption.CREATE)
+                    }
+                    future.complete(jarFile)
+                }
+                future
             }
-            val connection = URL(urlStr).openConnection() as HttpURLConnection
-            if (etag != null) {
-                connection.setRequestProperty("If-None-Match", etag)
-            }
-            connection.setRequestProperty("User-Agent", "Quiltflower IntelliJ Plugin")
-            connection.connect()
-            val responseCode = connection.responseCode
-            if (responseCode == HttpURLConnection.HTTP_NOT_MODIFIED) {
-                LOGGER.info("Quiltflower $version already downloaded")
-                future.complete(jarFile)
-                return@download
-            }
-            if (responseCode != HttpURLConnection.HTTP_OK) {
-                LOGGER.error("Failed to download quiltflower $version from $urlStr: $responseCode")
-                hadError = true
-                future.completeExceptionally(Throwable())
-                return@download
-            }
-            if (!Files.exists(jarFile.parent)) {
-                Files.createDirectories(jarFile.parent)
-            }
-            connection.inputStream.use {
-                Files.copy(it, jarFile, StandardCopyOption.REPLACE_EXISTING)
-            }
-            val newEtag = connection.getHeaderField("ETag")
-            if (newEtag != null) {
-                Files.writeString(etagFile, newEtag, StandardOpenOption.CREATE)
-            }
-            future.complete(jarFile)
+
+            this.downloadedQuiltflowerFuture = future
+
+            return future
         }
+    }
+
+    fun downloadQuiltflowerVersions(): CompletableFuture<QuiltflowerVersions> {
+        fun download(baseUrl: String): Pair<SemVer?, List<SemVer>> {
+            val latestVersion: SemVer?
+            val allVersions: List<SemVer>
+            URL(baseUrl + "maven-metadata.xml").openConnection().getInputStream().use { inputStream ->
+                val element = JDOMUtil.load(inputStream)
+                if (element.name != "metadata") {
+                    throw IllegalStateException("Invalid metadata file")
+                }
+                val versioning = element.getChild("versioning") ?: throw IllegalStateException("Invalid metadata file")
+                latestVersion = SemVer.parseFromText(versioning.getChild("latest")?.text)
+                allVersions = versioning.getChild("versions")?.children?.mapNotNull {
+                    SemVer.parseFromText(it.text)
+                } ?: emptyList()
+            }
+            return latestVersion to allVersions
+        }
+
+        val future = CompletableFuture<QuiltflowerVersions>()
+
+        runOnBackgroundThreadWithProgress("Fetching Quiltflower versions") {
+            try {
+                val (latestVersion, allVersions) = download(releaseBaseUrl)
+                val (latestSnapshot, allSnapshots) = download(snapshotsBaseUrl)
+                val snapshotSubversions = allSnapshots.associateWith { snapshot ->
+                    val latest: String
+                    val all: List<String>
+                    URL("${snapshotsBaseUrl}$snapshot/maven-metadata.xml").openConnection()
+                        .getInputStream().use { inputStream ->
+                            val element = JDOMUtil.load(inputStream)
+                            if (element.name != "metadata") {
+                                throw IllegalStateException("Invalid metadata file")
+                            }
+                            val versioning = element.getChild("versioning")
+                                ?: throw IllegalStateException("Invalid metadata file")
+                            val latestSnapshotVer = versioning.getChild("snapshot")
+                                ?: throw IllegalStateException("Invalid metadata file")
+                            val timestamp = latestSnapshotVer.getChild("timestamp")?.text
+                                ?: throw IllegalStateException("Invalid metadata file")
+                            val buildNumber = latestSnapshotVer.getChild("buildNumber")?.text
+                                ?: throw IllegalStateException("Invalid metadata file")
+                            latest = "${snapshot.toString().replace("-SNAPSHOT", "")}-$timestamp-$buildNumber"
+                            all = versioning.getChild("snapshotVersions")?.children?.mapNotNull {
+                                if (it.getChild("extension")?.text == "jar" && it.getChild("classifier") == null) {
+                                    it.getChild("value")?.text
+                                } else {
+                                    null
+                                }
+                            } ?: emptyList()
+                        }
+                    (latest to all)
+                }
+                val result = QuiltflowerVersions(
+                    latestVersion,
+                    SemVer.parseFromText(snapshotSubversions[latestSnapshot]?.first),
+                    allVersions,
+                    allSnapshots.flatMap {
+                        snapshotSubversions[it]?.second?.mapNotNull(SemVer::parseFromText) ?: emptyList()
+                    }
+                )
+                if (quiltflowerVersion == null || autoUpdate) {
+                    quiltflowerVersion = if (enableSnapshots) {
+                        result.latestSnapshot
+                    } else {
+                        result.latestRelease
+                    }
+                }
+                future.complete(result)
+            } catch (e: Throwable) {
+                future.completeExceptionally(e)
+            }
+        }
+
         return future
     }
 
@@ -173,67 +252,6 @@ class QuiltflowerState : PersistentStateComponent<QuiltflowerState> {
 
         fun getInstance(): QuiltflowerState {
             return ApplicationManager.getApplication().getService(QuiltflowerState::class.java)
-        }
-
-        fun reloadQuiltflowerVersions(callback: (QuiltflowerVersions) -> Unit, errorCallback: (Throwable) -> Unit) {
-            fun download(baseUrl: String): Pair<SemVer?, List<SemVer>> {
-                val latestVersion: SemVer?
-                val allVersions: List<SemVer>
-                URL(baseUrl + "maven-metadata.xml").openConnection().getInputStream().use { inputStream ->
-                    val element = JDOMUtil.load(inputStream)
-                    if (element.name != "metadata") {
-                        throw IllegalStateException("Invalid metadata file")
-                    }
-                    val versioning = element.getChild("versioning") ?: throw IllegalStateException("Invalid metadata file")
-                    latestVersion = SemVer.parseFromText(versioning.getChild("latest")?.text)
-                    allVersions = versioning.getChild("versions")?.children?.mapNotNull {
-                        SemVer.parseFromText(it.text)
-                    } ?: emptyList()
-                }
-                return latestVersion to allVersions
-            }
-            runOnBackgroundThreadWithProgress("Fetching Quiltflower versions") {
-                try {
-                    val (latestVersion, allVersions) = download(getInstance().releaseBaseUrl)
-                    val (latestSnapshot, allSnapshots) = download(getInstance().snapshotsBaseUrl)
-                    val snapshotSubversions = allSnapshots.associateWith { snapshot ->
-                        val latest: String
-                        val all: List<String>
-                        URL("${getInstance().snapshotsBaseUrl}$snapshot/maven-metadata.xml").openConnection()
-                            .getInputStream().use { inputStream ->
-                                val element = JDOMUtil.load(inputStream)
-                                if (element.name != "metadata") {
-                                    throw IllegalStateException("Invalid metadata file")
-                                }
-                                val versioning = element.getChild("versioning")
-                                    ?: throw IllegalStateException("Invalid metadata file")
-                                val latestSnapshotVer = versioning.getChild("snapshot")
-                                    ?: throw IllegalStateException("Invalid metadata file")
-                                val timestamp = latestSnapshotVer.getChild("timestamp")?.text
-                                    ?: throw IllegalStateException("Invalid metadata file")
-                                val buildNumber = latestSnapshotVer.getChild("buildNumber")?.text
-                                    ?: throw IllegalStateException("Invalid metadata file")
-                                latest = "${snapshot.toString().replace("-SNAPSHOT", "")}-$timestamp-$buildNumber"
-                                all = versioning.getChild("snapshotVersions")?.children?.mapNotNull {
-                                    if (it.getChild("extension")?.text == "jar" && it.getChild("classifier") == null) {
-                                        it.getChild("value")?.text
-                                    } else {
-                                        null
-                                    }
-                                } ?: emptyList()
-                            }
-                        (latest to all)
-                    }
-                    callback(QuiltflowerVersions(
-                        latestVersion,
-                        SemVer.parseFromText(snapshotSubversions[latestSnapshot]?.first),
-                        allVersions,
-                        allSnapshots.flatMap { snapshotSubversions[it]?.second?.mapNotNull(SemVer::parseFromText) ?: emptyList() }
-                    ))
-                } catch (e: Throwable) {
-                    errorCallback(e)
-                }
-            }
         }
     }
 }

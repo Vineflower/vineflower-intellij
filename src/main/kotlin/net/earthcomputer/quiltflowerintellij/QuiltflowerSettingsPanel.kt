@@ -144,22 +144,24 @@ class QuiltflowerSettingsPanel(var prevQuiltflowerVersion: SemVer?) {
     }
 
     inner class QuiltflowerVersionsModel : ComboBoxModel<SemVer> {
-        private var myQuiltflowerVersions: QuiltflowerVersions? = null
         private val versions = mutableListOf<SemVer>()
         private val listeners = mutableListOf<ListDataListener>()
         private var selectedItem: SemVer? = null
 
         private fun refreshVersions() {
-            val (latestRelease, latestSnapshot, allRelease, allSnapshots) = myQuiltflowerVersions ?: return
+            val (latestRelease, latestSnapshot, allRelease, allSnapshots) =
+                QuiltflowerState.getInstance().quiltflowerVersionsFuture.getNow(null) ?: return
             val prevSize = versions.size
             versions.clear()
             versions.addAll(allRelease)
             if (enableSnapshotsCheckbox.isSelected) {
                 versions.addAll(allSnapshots)
             }
-            versions.sortDescending()
             val prevSelectedItem = selectedItem
-            quiltflowerVersionComboBox.selectedItem = null
+            if (prevSelectedItem != null && prevSelectedItem !in versions) {
+                versions += prevSelectedItem
+            }
+            versions.sortDescending()
             for (listener in listeners) {
                 if (prevSize > versions.size) {
                     listener.intervalRemoved(ListDataEvent(this, ListDataEvent.INTERVAL_REMOVED, versions.size, prevSize - 1))
@@ -170,7 +172,7 @@ class QuiltflowerSettingsPanel(var prevQuiltflowerVersion: SemVer?) {
                 }
             }
             when {
-                prevSelectedItem != null && prevSelectedItem in versions -> {
+                prevSelectedItem != null -> {
                     quiltflowerVersionComboBox.selectedItem = prevSelectedItem
                 }
                 autoUpdateCheckbox.isSelected -> {
@@ -186,10 +188,12 @@ class QuiltflowerSettingsPanel(var prevQuiltflowerVersion: SemVer?) {
             if (!fetchingVersionsIcon.isRunning) {
                 fetchingVersionsIcon.resume()
             }
-            QuiltflowerState.reloadQuiltflowerVersions(
-                { versions ->
-                    ApplicationManager.getApplication().invokeLater {
-                        myQuiltflowerVersions = versions
+            QuiltflowerState.getInstance().quiltflowerVersionsFuture = QuiltflowerState.getInstance().downloadQuiltflowerVersions().whenComplete { _, error ->
+                ApplicationManager.getApplication().invokeLater {
+                    if (error != null) {
+                        errorLabel.text = "Error fetching versions"
+                        LOGGER.error("Error fetching versions", error)
+                    } else {
                         refreshVersions()
                         if (!fetchingVersionsIcon.isDisposed) {
                             fetchingVersionsIcon.suspend()
@@ -197,9 +201,6 @@ class QuiltflowerSettingsPanel(var prevQuiltflowerVersion: SemVer?) {
                         }
                     }
                 }
-            ) {
-                errorLabel.text = "Error fetching versions"
-                LOGGER.error("Error fetching versions", it)
             }
 
             enableSnapshotsCheckbox.addActionListener {
