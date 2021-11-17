@@ -190,15 +190,17 @@ class QuiltflowerSettingsPanel(var prevQuiltflowerVersion: SemVer?) {
             }
             QuiltflowerState.getInstance().quiltflowerVersionsFuture = QuiltflowerState.getInstance().downloadQuiltflowerVersions().whenComplete { _, error ->
                 ApplicationManager.getApplication().invokeLater {
+                    if (!fetchingVersionsIcon.isDisposed) {
+                        fetchingVersionsIcon.suspend()
+                        fetchingVersionsIcon.isVisible = false
+                    }
                     if (error != null) {
                         errorLabel.text = "Error fetching versions"
                         LOGGER.error("Error fetching versions", error)
+                        pluginSettingsPanel.revalidate()
+                        pluginSettingsPanel.repaint()
                     } else {
                         refreshVersions()
-                        if (!fetchingVersionsIcon.isDisposed) {
-                            fetchingVersionsIcon.suspend()
-                            fetchingVersionsIcon.isVisible = false
-                        }
                     }
                 }
             }

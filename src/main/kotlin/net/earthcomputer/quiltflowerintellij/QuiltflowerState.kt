@@ -90,7 +90,7 @@ class QuiltflowerState : PersistentStateComponent<QuiltflowerState> {
             }
             return downloadQuiltflower().thenApply { path ->
                 try {
-                    var pluginJar = javaClass.protectionDomain.codeSource.location.toString()
+                    var pluginJar = javaClass.getResource("/${javaClass.name.replace('.', '/')}.class")!!.toString()
                     if (pluginJar.startsWith("jar:") && pluginJar.endsWith(".class")) {
                         pluginJar = pluginJar.substring(4).substringBeforeLast("!/")
                     }
