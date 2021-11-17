@@ -1,11 +1,15 @@
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
     <id>net.earthcomputer.quiltflowerintellij</id>
-    <name>quiltflower-intellij</name>
+    <name>Quiltflower</name>
     <vendor>Earthcomputer</vendor>
 
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.java</depends>
+
+    <applicationListeners>
+        <listener class="net.earthcomputer.quiltflowerintellij.QuiltflowerReloadListener" topic="com.intellij.ide.plugins.DynamicPluginListener"/>
+    </applicationListeners>
 
     <extensions defaultExtensionNs="com.intellij">
         <applicationConfigurable

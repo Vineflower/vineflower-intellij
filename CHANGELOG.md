@@ -3,5 +3,7 @@
 # quiltflower-intellij-plugin Changelog
 
 ## [Unreleased]
+
+## [1.0.0] - 2021-11-17
 ### Added
-- Initial scaffold created from [IntelliJ Platform Plugin Template](https://github.com/JetBrains/intellij-platform-plugin-template)
+- Initial release

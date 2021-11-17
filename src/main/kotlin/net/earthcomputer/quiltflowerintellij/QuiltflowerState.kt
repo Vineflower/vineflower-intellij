@@ -43,6 +43,9 @@ class QuiltflowerState : PersistentStateComponent<QuiltflowerState> {
     var quiltflowerSettings: MutableMap<String, String> = mutableMapOf()
 
     @Transient
+    private var hasInitialized = false
+
+    @Transient
     @JvmField
     var quiltflowerVersionsFuture: CompletableFuture<QuiltflowerVersions> = downloadQuiltflowerVersions()
     @Transient
@@ -61,6 +64,10 @@ class QuiltflowerState : PersistentStateComponent<QuiltflowerState> {
         }
 
     fun initialize() {
+        if (hasInitialized) {
+            return
+        }
+        hasInitialized = true
         downloadQuiltflower().whenComplete { path, error ->
             if (error != null) {
                 LOGGER.error("Failed to download Quiltflower", error)
