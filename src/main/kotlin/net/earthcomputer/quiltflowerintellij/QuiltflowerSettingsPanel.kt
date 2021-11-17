@@ -71,7 +71,7 @@ class QuiltflowerSettingsPanel(var prevQuiltflowerVersion: SemVer?) {
             quiltflowerSettingsPanel.repaint()
             return
         }
-        val classLoader = QuiltflowerState.getInstance().getQuiltflowerClassLoader()?.getNow(null) ?: return
+        val classLoader = QuiltflowerState.getInstance().getQuiltflowerClassLoader().getNow(null) ?: return
         val preferencesClass = classLoader.loadClass("org.jetbrains.java.decompiler.main.extern.IFernflowerPreferences")
         @Suppress("UNCHECKED_CAST")
         val defaults = (preferencesClass.getField("DEFAULTS").get(null) as Map<String, *>).toMutableMap()

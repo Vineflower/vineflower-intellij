@@ -76,91 +76,100 @@ class QuiltflowerState : PersistentStateComponent<QuiltflowerState> {
         XmlSerializerUtil.copyBean(state, this)
     }
 
-    fun getQuiltflowerClassLoader(): CompletableFuture<URLClassLoader>? {
-        val downloadedFuture = this.downloadedQuiltflowerFuture ?: return null
-        synchronized(downloadedFuture) {
+    fun getQuiltflowerClassLoader(): CompletableFuture<URLClassLoader> {
+        synchronized(this) {
             if (quiltflowerClassLoaderFuture != null) {
-                return quiltflowerClassLoaderFuture
+                return quiltflowerClassLoaderFuture!!
             }
-            return downloadedFuture.thenApply { path ->
-                var pluginJar = javaClass.protectionDomain.codeSource.location.toString()
-                if (pluginJar.startsWith("jar:") && pluginJar.endsWith(".class")) {
-                    pluginJar = pluginJar.substring(4).substringBeforeLast("!/")
+            return downloadQuiltflower().thenApply { path ->
+                try {
+                    var pluginJar = javaClass.protectionDomain.codeSource.location.toString()
+                    if (pluginJar.startsWith("jar:") && pluginJar.endsWith(".class")) {
+                        pluginJar = pluginJar.substring(4).substringBeforeLast("!/")
+                    }
+                    URLClassLoader(
+                        arrayOf(path.toUri().toURL(), URL(pluginJar)),
+                        ClassLoader.getPlatformClassLoader()
+                    )
+                } catch (e: Throwable) {
+                    hadError = true
+                    throw e
                 }
-                URLClassLoader(
-                    arrayOf(path.toUri().toURL(), URL(pluginJar)),
-                    ClassLoader.getPlatformClassLoader()
-                )
             }.also { quiltflowerClassLoaderFuture = it }
         }
     }
 
     fun downloadQuiltflower(): CompletableFuture<Path> {
-        val oldClassLoader = this.quiltflowerClassLoaderFuture
-        this.quiltflowerClassLoaderFuture = null
-        oldClassLoader?.whenComplete() { loader, _ -> loader.close() }
-        synchronized(quiltflowerVersionsFuture) {
-            if (downloadedQuiltflowerFuture != null) {
+        synchronized(this) {
+            if (!hadError && downloadedQuiltflowerFuture != null) {
                 return downloadedQuiltflowerFuture!!
             }
+            val oldClassLoader = this.quiltflowerClassLoaderFuture
+            this.quiltflowerClassLoaderFuture = null
+            oldClassLoader?.whenComplete() { loader, _ -> loader.close() }
             this.hadError = false
             val future = quiltflowerVersionsFuture.thenCompose { quiltflowerVersions ->
                 val future = CompletableFuture<Path>()
                 runOnBackgroundThreadWithProgress("Downloading Quiltflower") download@{
-                    val version = quiltflowerVersion
-                    if (version == null) {
-                        hadError = true
-                        future.completeExceptionally(Throwable())
-                        return@download
-                    }
-                    val jarsDir = PathManager.getConfigDir().resolve("quiltflower").resolve("jars")
-                    val jarFile = jarsDir.resolve("quiltflower-$version.jar")
-                    val etagFile = jarsDir.resolve("quiltflower-$version.etag")
-                    val etag = if (jarFile.exists() && etagFile.exists()) etagFile.readText() else null
-                    val urlStr = if (version in quiltflowerVersions.allReleases) {
-                        "$releaseBaseUrl$version/quiltflower-$version.jar"
-                    } else {
-                        val snapshotVersion = version.toString().substringBefore("-") + "-SNAPSHOT"
-                        "$snapshotsBaseUrl$snapshotVersion/quiltflower-$version.jar"
-                    }
-                    val connection = URL(urlStr).openConnection() as HttpURLConnection
-                    if (etag != null) {
-                        connection.setRequestProperty("If-None-Match", etag)
-                    }
-                    connection.setRequestProperty("User-Agent", "Quiltflower IntelliJ Plugin")
                     try {
-                        connection.connect()
-                    } catch (e: UnknownHostException) {
-                        if (jarFile.exists()) {
-                            LOGGER.info("Unknown host, we're probably offline, assume jar is ok")
+                        val version = quiltflowerVersion
+                        if (version == null) {
+                            hadError = true
+                            future.completeExceptionally(Throwable())
+                            return@download
+                        }
+                        val jarsDir = PathManager.getConfigDir().resolve("quiltflower").resolve("jars")
+                        val jarFile = jarsDir.resolve("quiltflower-$version.jar")
+                        val etagFile = jarsDir.resolve("quiltflower-$version.etag")
+                        val etag = if (jarFile.exists() && etagFile.exists()) etagFile.readText() else null
+                        val urlStr = if (version in quiltflowerVersions.allReleases) {
+                            "$releaseBaseUrl$version/quiltflower-$version.jar"
+                        } else {
+                            val snapshotVersion = version.toString().substringBefore("-") + "-SNAPSHOT"
+                            "$snapshotsBaseUrl$snapshotVersion/quiltflower-$version.jar"
+                        }
+                        val connection = URL(urlStr).openConnection() as HttpURLConnection
+                        if (etag != null) {
+                            connection.setRequestProperty("If-None-Match", etag)
+                        }
+                        connection.setRequestProperty("User-Agent", "Quiltflower IntelliJ Plugin")
+                        try {
+                            connection.connect()
+                        } catch (e: UnknownHostException) {
+                            if (jarFile.exists()) {
+                                LOGGER.info("Unknown host, we're probably offline, assume jar is ok")
+                                future.complete(jarFile)
+                                return@download
+                            }
+                            throw e
+                        }
+                        val responseCode = connection.responseCode
+                        if (responseCode == HttpURLConnection.HTTP_NOT_MODIFIED) {
+                            LOGGER.info("Quiltflower $version already downloaded")
                             future.complete(jarFile)
                             return@download
                         }
-                        throw e
-                    }
-                    val responseCode = connection.responseCode
-                    if (responseCode == HttpURLConnection.HTTP_NOT_MODIFIED) {
-                        LOGGER.info("Quiltflower $version already downloaded")
+                        if (responseCode != HttpURLConnection.HTTP_OK) {
+                            LOGGER.error("Failed to download quiltflower $version from $urlStr: $responseCode")
+                            hadError = true
+                            future.completeExceptionally(Throwable())
+                            return@download
+                        }
+                        if (!Files.exists(jarFile.parent)) {
+                            Files.createDirectories(jarFile.parent)
+                        }
+                        connection.inputStream.use {
+                            Files.copy(it, jarFile, StandardCopyOption.REPLACE_EXISTING)
+                        }
+                        val newEtag = connection.getHeaderField("ETag")
+                        if (newEtag != null) {
+                            Files.writeString(etagFile, newEtag, StandardOpenOption.CREATE)
+                        }
                         future.complete(jarFile)
-                        return@download
-                    }
-                    if (responseCode != HttpURLConnection.HTTP_OK) {
-                        LOGGER.error("Failed to download quiltflower $version from $urlStr: $responseCode")
+                    } catch (e: Throwable) {
                         hadError = true
-                        future.completeExceptionally(Throwable())
-                        return@download
+                        future.completeExceptionally(e)
                     }
-                    if (!Files.exists(jarFile.parent)) {
-                        Files.createDirectories(jarFile.parent)
-                    }
-                    connection.inputStream.use {
-                        Files.copy(it, jarFile, StandardCopyOption.REPLACE_EXISTING)
-                    }
-                    val newEtag = connection.getHeaderField("ETag")
-                    if (newEtag != null) {
-                        Files.writeString(etagFile, newEtag, StandardOpenOption.CREATE)
-                    }
-                    future.complete(jarFile)
                 }
                 future
             }

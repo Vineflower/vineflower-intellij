@@ -33,7 +33,7 @@ class QuiltflowerDecompiler : ClassFileDecompilers.Light() {
             indicator.text = "Decompiling ${file.name}"
         }
 
-        val classLoader = runCatching { QuiltflowerState.getInstance().getQuiltflowerClassLoader()?.get() }.getOrNull()
+        val classLoader = runCatching { QuiltflowerState.getInstance().getQuiltflowerClassLoader().get() }.getOrNull()
             ?: return LoadTextUtil.loadText(file)
 
         try {
