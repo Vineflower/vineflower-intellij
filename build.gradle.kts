@@ -22,14 +22,6 @@ version = properties("pluginVersion")
 // Configure project's dependencies
 repositories {
     mavenCentral()
-    maven {
-        name = "Quilt"
-        url = uri("https://maven.quiltmc.org/repository/release/")
-    }
-}
-
-dependencies {
-    compileOnly("org.quiltmc:quiltflower:1.6.0")
 }
 
 // Configure Gradle IntelliJ Plugin - read more: https://github.com/JetBrains/gradle-intellij-plugin
