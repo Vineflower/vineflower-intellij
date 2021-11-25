@@ -47,7 +47,7 @@ class QuiltflowerState : PersistentStateComponent<QuiltflowerState> {
 
     @Transient
     @JvmField
-    var quiltflowerVersionsFuture: CompletableFuture<QuiltflowerVersions> = downloadQuiltflowerVersions()
+    var quiltflowerVersionsFuture: CompletableFuture<QuiltflowerVersions> = CompletableFuture.completedFuture(QuiltflowerVersions(null, null, listOf(), listOf()))
     @Transient
     @JvmField
     var hadError = false
@@ -68,6 +68,7 @@ class QuiltflowerState : PersistentStateComponent<QuiltflowerState> {
             return
         }
         hasInitialized = true
+        quiltflowerVersionsFuture = downloadQuiltflowerVersions()
         downloadQuiltflower().whenComplete { path, error ->
             if (error != null) {
                 LOGGER.error("Failed to download Quiltflower", error)
