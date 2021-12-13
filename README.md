@@ -1,4 +1,10 @@
-# quiltflower-intellij-plugin
+# Quiltflower Plugin for IntelliJ IDEA
+
+<img src="src/main/resources/META-INF/pluginIcon.svg" alt="Icon" width="128">
+
+![Version](https://img.shields.io/jetbrains/plugin/v/net.earthcomputer.quiltflowerintellij)
+![Downloads](https://img.shields.io/jetbrains/plugin/d/net.earthcomputer.quiltflowerintellij)
+![Rating](https://img.shields.io/jetbrains/plugin/r/rating/net.earthcomputer.quiltflowerintellij)
 
 <!-- Plugin description -->
 
@@ -20,9 +26,3 @@ Most Quiltflower settings are configurable in the plugin settings.
 
   Download the [latest release](https://github.com/Earthcomputer/quiltflower-intellij-plugin/releases/latest) and install it manually using
   <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>⚙️</kbd> > <kbd>Install plugin from disk...</kbd>
-
-
----
-Plugin based on the [IntelliJ Platform Plugin Template][template].
-
-[template]: https://github.com/JetBrains/intellij-platform-plugin-template
