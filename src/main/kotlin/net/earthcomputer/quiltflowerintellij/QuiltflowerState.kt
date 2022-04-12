@@ -12,6 +12,7 @@ import com.intellij.util.io.readText
 import com.intellij.util.text.SemVer
 import com.intellij.util.xmlb.XmlSerializerUtil
 import com.intellij.util.xmlb.annotations.Transient
+import java.io.FileNotFoundException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLClassLoader
@@ -192,16 +193,21 @@ class QuiltflowerState : PersistentStateComponent<QuiltflowerState> {
         fun download(baseUrl: String): Pair<SemVer?, List<SemVer>> {
             val latestVersion: SemVer?
             val allVersions: List<SemVer>
-            URL(baseUrl + "maven-metadata.xml").openConnection().getInputStream().use { inputStream ->
-                val element = JDOMUtil.load(inputStream)
-                if (element.name != "metadata") {
-                    throw IllegalStateException("Invalid metadata file")
+            try {
+                URL(baseUrl + "maven-metadata.xml").openConnection().getInputStream().use { inputStream ->
+                    val element = JDOMUtil.load(inputStream)
+                    if (element.name != "metadata") {
+                        throw IllegalStateException("Invalid metadata file")
+                    }
+                    val versioning = element.getChild("versioning") ?: throw IllegalStateException("Invalid metadata file")
+                    latestVersion = SemVer.parseFromText(versioning.getChild("latest")?.text)
+                    allVersions = versioning.getChild("versions")?.children?.mapNotNull {
+                        SemVer.parseFromText(it.text)
+                    } ?: emptyList()
                 }
-                val versioning = element.getChild("versioning") ?: throw IllegalStateException("Invalid metadata file")
-                latestVersion = SemVer.parseFromText(versioning.getChild("latest")?.text)
-                allVersions = versioning.getChild("versions")?.children?.mapNotNull {
-                    SemVer.parseFromText(it.text)
-                } ?: emptyList()
+            } catch (e: FileNotFoundException) {
+                LOGGER.warn("${baseUrl}maven-metadata.xml could not be found.")
+                return null to emptyList()
             }
             return latestVersion to allVersions
         }
