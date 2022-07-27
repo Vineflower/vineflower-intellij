@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+## [1.0.3] - 2022-07-27
+### Added
+- Support for 2022.2
+
 ## [1.0.2] - 2022-04-13
 ### Added
 - Support for 2022.1
