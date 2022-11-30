@@ -8,6 +8,7 @@
     <depends>com.intellij.modules.java</depends>
 
     <applicationListeners>
+        <listener class="net.earthcomputer.quiltflowerintellij.QuiltflowerPreloader" topic="com.intellij.ide.AppLifecycleListener"/>
         <listener class="net.earthcomputer.quiltflowerintellij.QuiltflowerReloadListener" topic="com.intellij.ide.plugins.DynamicPluginListener"/>
     </applicationListeners>
 
@@ -18,7 +19,6 @@
                 id="net.earthcomputer.quiltflowerintellij.QuiltflowerSettings"
                 displayName="Quiltflower"/>
         <applicationService serviceImplementation="net.earthcomputer.quiltflowerintellij.QuiltflowerState"/>
-        <preloadingActivity implementation="net.earthcomputer.quiltflowerintellij.QuiltflowerPreloadingActivity"/>
         <psi.classFileDecompiler implementation="net.earthcomputer.quiltflowerintellij.QuiltflowerDecompiler" order="first"/>
     </extensions>
 </idea-plugin>
