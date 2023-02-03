@@ -73,15 +73,7 @@ class QuiltflowerSettingsPanel(var prevQuiltflowerVersion: SemVer?) {
         val classLoader = QuiltflowerState.getInstance().getQuiltflowerClassLoader().getNow(null) ?: return
         val preferencesClass = classLoader.loadClass("org.jetbrains.java.decompiler.main.extern.IFernflowerPreferences")
 
-        val fieldAnnotations = try {
-            @Suppress("UNCHECKED_CAST")
-            QuiltflowerPreferences.FieldAnnotations(
-                classLoader.loadClass("org.jetbrains.java.decompiler.main.extern.IFernflowerPreferences\$Name") as Class<out Annotation>,
-                classLoader.loadClass("org.jetbrains.java.decompiler.main.extern.IFernflowerPreferences\$Description") as Class<out Annotation>,
-            )
-        } catch (e: ClassNotFoundException) {
-            null
-        }
+        val fieldAnnotations = QuiltflowerPreferences.FieldAnnotations(classLoader)
 
         @Suppress("UNCHECKED_CAST")
         val defaults = (preferencesClass.getField("DEFAULTS").get(null) as Map<String, *>).toMutableMap()
@@ -93,12 +85,12 @@ class QuiltflowerSettingsPanel(var prevQuiltflowerVersion: SemVer?) {
             if (!Modifier.isStatic(field.modifiers) || field.type != String::class.java) {
                 continue
             }
-            val key = field.get(null) as String? ?: continue
+            val key = QuiltflowerPreferences.inferKey(field, fieldAnnotations) ?: continue
             if (key in QuiltflowerPreferences.ignoredPreferences) {
                 continue
             }
 
-            val type = QuiltflowerPreferences.inferType(key, defaults) ?: continue
+            val type = QuiltflowerPreferences.inferType(key, defaults, field, fieldAnnotations) ?: continue
             val name = QuiltflowerPreferences.inferName(key, field, fieldAnnotations)
             val description = QuiltflowerPreferences.inferDescription(field, fieldAnnotations)
             val currentValue = quiltflowerSettings[key] ?: defaults[key]!!.toString()
