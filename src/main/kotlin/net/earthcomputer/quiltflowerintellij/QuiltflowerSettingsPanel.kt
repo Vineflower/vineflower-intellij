@@ -3,7 +3,7 @@ package net.earthcomputer.quiltflowerintellij
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.ui.ComboBox
-import com.intellij.openapi.util.text.StringUtil
+import com.intellij.ui.ContextHelpLabel
 import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.IdeBorderFactory
 import com.intellij.ui.JBIntSpinner
@@ -14,7 +14,6 @@ import com.intellij.util.text.SemVer
 import com.intellij.util.ui.AsyncProcessIcon
 import java.awt.FlowLayout
 import java.lang.reflect.Modifier
-import java.util.Locale
 import javax.swing.BoxLayout
 import javax.swing.ComboBoxModel
 import javax.swing.JCheckBox
@@ -73,21 +72,35 @@ class QuiltflowerSettingsPanel(var prevQuiltflowerVersion: SemVer?) {
         }
         val classLoader = QuiltflowerState.getInstance().getQuiltflowerClassLoader().getNow(null) ?: return
         val preferencesClass = classLoader.loadClass("org.jetbrains.java.decompiler.main.extern.IFernflowerPreferences")
+
+        val fieldAnnotations = try {
+            @Suppress("UNCHECKED_CAST")
+            QuiltflowerPreferences.FieldAnnotations(
+                classLoader.loadClass("org.jetbrains.java.decompiler.main.extern.IFernflowerPreferences\$Name") as Class<out Annotation>,
+                classLoader.loadClass("org.jetbrains.java.decompiler.main.extern.IFernflowerPreferences\$Description") as Class<out Annotation>,
+            )
+        } catch (e: ClassNotFoundException) {
+            null
+        }
+
         @Suppress("UNCHECKED_CAST")
         val defaults = (preferencesClass.getField("DEFAULTS").get(null) as Map<String, *>).toMutableMap()
         defaults.putAll(QuiltflowerPreferences.defaultOverrides)
-        val allSettings = mutableListOf<Pair<String, JComponent>>()
+
+        class SettingsEntry(val name: String, val editComponent: JComponent, val description: String?)
+        val allSettings = mutableListOf<SettingsEntry>()
         for (field in preferencesClass.fields) {
             if (!Modifier.isStatic(field.modifiers) || field.type != String::class.java) {
                 continue
             }
-            val key = field.get(null) as String
+            val key = field.get(null) as String? ?: continue
             if (key in QuiltflowerPreferences.ignoredPreferences) {
                 continue
             }
+
             val type = QuiltflowerPreferences.inferType(key, defaults) ?: continue
-            val name = QuiltflowerPreferences.nameOverrides[key]
-                ?: StringUtil.toTitleCase(field.name.replace("_", " ").toLowerCase(Locale.ROOT))
+            val name = QuiltflowerPreferences.inferName(key, field, fieldAnnotations)
+            val description = QuiltflowerPreferences.inferDescription(field, fieldAnnotations)
             val currentValue = quiltflowerSettings[key] ?: defaults[key]!!.toString()
             val component = when (type) {
                 QuiltflowerPreferences.Type.BOOLEAN -> JBCheckBox().also { checkBox ->
@@ -125,17 +138,20 @@ class QuiltflowerSettingsPanel(var prevQuiltflowerVersion: SemVer?) {
                     }
                 }
             }
-            allSettings += name to component
+            allSettings += SettingsEntry(name, component, description)
         }
-        allSettings.sortBy { it.first }
-        for ((name, component) in allSettings) {
+        allSettings.sortBy { it.name }
+        for (entry in allSettings) {
             val panel = JPanel(FlowLayout(FlowLayout.LEFT))
-            if (component is JCheckBox) {
-                panel.add(component)
+            if (entry.editComponent is JCheckBox) {
+                panel.add(entry.editComponent)
             }
-            panel.add(JBLabel(name))
-            if (component !is JCheckBox) {
-                panel.add(component)
+            panel.add(JBLabel(entry.name))
+            if (entry.description != null) {
+                panel.add(ContextHelpLabel.create(entry.description))
+            }
+            if (entry.editComponent !is JCheckBox) {
+                panel.add(entry.editComponent)
             }
             quiltflowerSettingsPanel.add(panel)
         }

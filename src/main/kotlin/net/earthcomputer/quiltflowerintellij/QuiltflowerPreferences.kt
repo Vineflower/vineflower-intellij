@@ -2,6 +2,10 @@ package net.earthcomputer.quiltflowerintellij
 
 import com.intellij.application.options.CodeStyle
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.util.text.StringUtil
+import java.lang.reflect.Field
+import java.lang.reflect.Method
+import java.util.*
 
 object QuiltflowerPreferences {
     val ignoredPreferences = setOf(
@@ -48,7 +52,39 @@ object QuiltflowerPreferences {
         return Type.STRING
     }
 
+    fun inferName(key: String, field: Field, fieldAnnotations: FieldAnnotations?): String {
+        if (fieldAnnotations != null) {
+            val name = field.getAnnotation(fieldAnnotations.name)
+            if (name != null) {
+                return fieldAnnotations.nameValue.invoke(name) as String
+            }
+        }
+
+        val nameOverride = nameOverrides[key]
+        if (nameOverride != null) {
+            return nameOverride
+        }
+
+        return StringUtil.toTitleCase(field.name.replace("_", " ").toLowerCase(Locale.ROOT))
+    }
+
+    fun inferDescription(field: Field, fieldAnnotations: FieldAnnotations?): String? {
+        if (fieldAnnotations != null) {
+            val description = field.getAnnotation(fieldAnnotations.description)
+            if (description != null) {
+                return fieldAnnotations.descriptionValue.invoke(description) as String
+            }
+        }
+
+        return null
+    }
+
     enum class Type {
         BOOLEAN, INTEGER, STRING
+    }
+
+    class FieldAnnotations(val name: Class<out Annotation>, val description: Class<out Annotation>) {
+        val nameValue: Method = name.getMethod("value")
+        val descriptionValue: Method = description.getMethod("value")
     }
 }
