@@ -22,6 +22,7 @@ import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
 import java.util.concurrent.CompletableFuture
+import java.util.stream.Collectors
 
 @State(
     name = "net.earthcomputer.quiltflowerintellij.QuiltflowerState",
@@ -121,13 +122,26 @@ class QuiltflowerState : PersistentStateComponent<QuiltflowerState> {
                 val future = CompletableFuture<Path>()
                 runOnBackgroundThreadWithProgress("Downloading Quiltflower") download@{
                     try {
-                        val version = quiltflowerVersion
-                        if (version == null) {
-                            hadError = true
-                            future.completeExceptionally(Throwable())
-                            return@download
-                        }
                         val jarsDir = PathManager.getConfigDir().resolve("quiltflower").resolve("jars")
+                        val version = quiltflowerVersion ?: run {
+                            // we may be offline, try to find latest version from file system
+                            val versions = Files.list(jarsDir).use { subFiles ->
+                                subFiles
+                                    .map { it.fileName.toString() }
+                                    .filter { it.startsWith("quiltflower-") && it.endsWith(".jar") }
+                                    .map { it.substring(12, it.length - 4) }
+                                    .filter { enableSnapshots || !it.contains('-') }
+                                    .map(SemVer::parseFromText)
+                                    .filter { it != null }
+                                    .map { it!! }
+                                    .collect(Collectors.toList())
+                            }
+                            versions.maxOrNull() ?: run {
+                                hadError = true
+                                future.completeExceptionally(Throwable())
+                                return@download
+                            }
+                        }
                         val jarFile = jarsDir.resolve("quiltflower-$version.jar")
                         val etagFile = jarsDir.resolve("quiltflower-$version.etag")
                         val etag = if (jarFile.exists() && etagFile.exists()) etagFile.readText() else null
