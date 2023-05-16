@@ -34,13 +34,17 @@ object QuiltflowerPreferences {
         "__unit_test_mode__" to if (ApplicationManager.getApplication().isUnitTestMode) "1" else "0",
     )
 
-    val nameOverrides = mapOf(
+    private val nameOverrides = mapOf(
         "dc4" to "Decompile Class 1.4",
         "ind" to "Indent Size",
         "lit" to "Literals As-Is",
     )
 
-    fun inferKey(field: Field, fieldAnnotations: FieldAnnotations): String? {
+    fun inferLongKey(field: Field): String? {
+        return field.get(null) as String?
+    }
+
+    fun inferShortKey(field: Field, fieldAnnotations: FieldAnnotations): String? {
         if (fieldAnnotations.shortName != null) {
             val shortName = field.getAnnotation(fieldAnnotations.shortName)?.value
             if (shortName != null) {
