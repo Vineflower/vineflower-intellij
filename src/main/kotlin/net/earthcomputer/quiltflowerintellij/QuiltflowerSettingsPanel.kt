@@ -85,15 +85,16 @@ class QuiltflowerSettingsPanel(var prevQuiltflowerVersion: SemVer?) {
             if (!Modifier.isStatic(field.modifiers) || field.type != String::class.java) {
                 continue
             }
-            val key = QuiltflowerPreferences.inferKey(field, fieldAnnotations) ?: continue
+            val key = QuiltflowerPreferences.inferShortKey(field, fieldAnnotations) ?: continue
             if (key in QuiltflowerPreferences.ignoredPreferences) {
                 continue
             }
+            val longKey = QuiltflowerPreferences.inferLongKey(field) ?: continue
 
             val type = QuiltflowerPreferences.inferType(key, defaults, field, fieldAnnotations) ?: continue
             val name = QuiltflowerPreferences.inferName(key, field, fieldAnnotations)
             val description = QuiltflowerPreferences.inferDescription(field, fieldAnnotations)
-            val currentValue = quiltflowerSettings[key] ?: defaults[key]!!.toString()
+            val currentValue = quiltflowerSettings[key] ?: (defaults[key] ?: defaults[longKey]!!).toString()
             val component = when (type) {
                 QuiltflowerPreferences.Type.BOOLEAN -> JBCheckBox().also { checkBox ->
                     checkBox.isSelected = currentValue == "1"
