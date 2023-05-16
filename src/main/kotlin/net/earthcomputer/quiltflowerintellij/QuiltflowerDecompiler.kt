@@ -3,20 +3,29 @@ package net.earthcomputer.quiltflowerintellij
 import com.intellij.execution.filters.LineNumbersMapping
 import com.intellij.ide.highlighter.JavaClassFileType
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.fileEditor.impl.LoadTextUtil
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.progress.ProgressManager
+import com.intellij.openapi.project.DumbService
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.project.ProjectLocator
 import com.intellij.openapi.util.registry.Registry
 import com.intellij.openapi.util.text.Strings
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.vfs.readBytes
+import com.intellij.psi.JavaPsiFacade
+import com.intellij.psi.PsiClass
 import com.intellij.psi.compiled.ClassFileDecompilers
+import com.intellij.psi.search.GlobalSearchScope
 import java.io.File
 import java.io.IOException
 import java.lang.reflect.InvocationTargetException
 import java.net.URLClassLoader
 import java.util.function.BiConsumer
 import java.util.function.Consumer
+import java.util.function.Predicate
 
 class QuiltflowerDecompiler : ClassFileDecompilers.Light() {
     companion object {
@@ -122,6 +131,31 @@ class QuiltflowerDecompiler : ClassFileDecompilers.Light() {
         val addSourceMethod = decompilerClass.getDeclaredMethod("addSource", File::class.java)
         files.forEach { addSourceMethod.invoke(decompiler, File(it.path)) }
 
+        // check if library API is available
+        try {
+            val iContextSourceClass = classLoader.loadClass("org.jetbrains.java.decompiler.main.extern.IContextSource")
+            iContextSourceClass.getMethod("isLazy")
+
+            val project = ProjectLocator.getInstance().guessProjectForFile(file)
+            if (project != null) {
+                // construct a context source
+                val myContextSourceClass = classLoader.loadClass("net.earthcomputer.quiltflowerintellij.impl.MyContextSource")
+                val myContextSourceCtor = myContextSourceClass.getDeclaredConstructor(
+                        Predicate::class.java,
+                        java.util.function.Function::class.java
+                )
+                myContextSourceCtor.isAccessible = true
+                val myContextSource = myContextSourceCtor.newInstance(
+                        Predicate<String> { doesClassExist(project, it) },
+                        java.util.function.Function<String, ByteArray?> { getClassBytes(project, it) },
+                )
+
+                decompilerClass.getMethod("addLibrary", iContextSourceClass).invoke(decompiler, myContextSource)
+            }
+        } catch (ignore: ClassNotFoundException) {
+        } catch (ignore: NoSuchMethodException) {
+        }
+
         // invoke the decompiler
         decompilerClass.getMethod("decompileContext").invoke(decompiler)
 
@@ -137,5 +171,35 @@ class QuiltflowerDecompiler : ClassFileDecompilers.Light() {
         val resultField = myResultSaverClass.getDeclaredField("myResult")
         resultField.isAccessible = true
         return (resultField.get(resultSaver) as CharSequence)
+    }
+
+    private fun doesClassExist(project: Project, className: String): Boolean {
+        return ReadAction.compute<Boolean, Throwable> { findClass(project, className) != null }
+    }
+
+    private fun getClassBytes(project: Project, className: String): ByteArray? {
+        return ReadAction.compute<ByteArray?, Throwable> {
+            doGetClassBytes(project, className)
+        }
+    }
+
+    private fun doGetClassBytes(project: Project, className: String): ByteArray? {
+        val clazz = findClass(project, className) ?: return null
+        val virtualFile = clazz.containingFile.virtualFile ?: return null
+        if (virtualFile.extension != "class") {
+            return null
+        }
+
+        // try to find class file based on the actual class name, solves the problem of inner classes
+        val nameWithoutPackage = className.substringAfterLast('/')
+        val actualFile = virtualFile.parent?.findChild("$nameWithoutPackage.class") ?: virtualFile
+        return actualFile.readBytes()
+    }
+
+    private fun findClass(project: Project, className: String): PsiClass? {
+        return DumbService.getInstance(project).computeWithAlternativeResolveEnabled<PsiClass?, Throwable> {
+            val dottyName = className.replace('/', '.').replace('$', '.')
+            JavaPsiFacade.getInstance(project).findClass(dottyName, GlobalSearchScope.allScope(project))
+        }
     }
 }

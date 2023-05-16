@@ -107,4 +107,9 @@ tasks {
     buildSearchableOptions {
         isEnabled = false
     }
+
+    runIde {
+        systemProperty("idea.ProcessCanceledException", "disabled")
+        systemProperty("idea.debug.mode", "true")
+    }
 }
