@@ -1,6 +1,9 @@
 # Vineflower Plugin for IntelliJ IDEA
 
-<img src="src/main/resources/META-INF/pluginIcon.svg" alt="Icon" width="128">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="src/main/resources/META-INF/pluginIcon_dark.svg">
+  <img alt="Icon" src="src/main/resources/META-INF/pluginIcon.svg" width="128">
+</picture>
 
 ![Version](https://img.shields.io/jetbrains/plugin/v/net.earthcomputer.quiltflowerintellij)
 ![Downloads](https://img.shields.io/jetbrains/plugin/d/net.earthcomputer.quiltflowerintellij)
