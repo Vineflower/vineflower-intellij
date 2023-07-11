@@ -1,4 +1,4 @@
-package net.earthcomputer.quiltflowerintellij
+package org.vineflower.ijplugin
 
 import com.intellij.application.options.CodeStyle
 import com.intellij.openapi.application.ApplicationManager
@@ -6,7 +6,7 @@ import com.intellij.openapi.util.text.StringUtil
 import java.lang.reflect.Field
 import java.util.*
 
-object QuiltflowerPreferences {
+object VineflowerPreferences {
     val ignoredPreferences = setOf(
         "ban", // banner
         "bsm", // bytecode source mapping
@@ -26,7 +26,7 @@ object QuiltflowerPreferences {
         "rsy" to "1", // remove synthetic
         "rbr" to "1", // remove bridge
         "nls" to "1", // newline separator
-        "ban" to "//\n// Source code recreated from a .class file by Quiltflower\n//\n\n", // banner
+        "ban" to "//\n// Source code recreated from a .class file by Vineflower\n//\n\n", // banner
         "mpm" to 0, // max processing method
         "iib" to "1", // ignore invalid bytecode
         "vac" to "1", // verify anonymous classes

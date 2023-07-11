@@ -1,4 +1,4 @@
-package net.earthcomputer.quiltflowerintellij
+package org.vineflower.ijplugin
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.logger
@@ -24,60 +24,60 @@ import javax.swing.event.DocumentEvent
 import javax.swing.event.ListDataEvent
 import javax.swing.event.ListDataListener
 
-class QuiltflowerSettingsPanel(var prevQuiltflowerVersion: SemVer?) {
+class VineflowerSettingsPanel(var prevVineflowerVersion: SemVer?) {
     companion object {
-        private val LOGGER = logger<QuiltflowerSettingsPanel>()
+        private val LOGGER = logger<VineflowerSettingsPanel>()
     }
 
     lateinit var mainPanel: JPanel
     lateinit var pluginSettingsPanel: JPanel
-    lateinit var quiltflowerSettingsPanel: JPanel
-    lateinit var enableQuiltflowerCheckbox: JBCheckBox
+    lateinit var vineflowerSettingsPanel: JPanel
+    lateinit var enableVineflowerCheckbox: JBCheckBox
     lateinit var autoUpdateCheckbox: JBCheckBox
     lateinit var enableSnapshotsCheckbox: JBCheckBox
-    lateinit var quiltflowerVersionComboBox: ComboBox<SemVer>
+    lateinit var vineflowerVersionComboBox: ComboBox<SemVer>
     lateinit var fetchingVersionsIcon: AsyncProcessIcon
     lateinit var errorLabel: JLabel
-    val quiltflowerSettings = mutableMapOf<String, String>()
+    val vineflowerSettings = mutableMapOf<String, String>()
 
     init {
         pluginSettingsPanel.border = IdeBorderFactory.createTitledBorder("Plugin Settings")
-        quiltflowerSettingsPanel.border = IdeBorderFactory.createTitledBorder("Quiltflower Settings")
-        quiltflowerSettingsPanel.layout = BoxLayout(quiltflowerSettingsPanel, BoxLayout.Y_AXIS)
+        vineflowerSettingsPanel.border = IdeBorderFactory.createTitledBorder("Vineflower Settings")
+        vineflowerSettingsPanel.layout = BoxLayout(vineflowerSettingsPanel, BoxLayout.Y_AXIS)
 
-        refreshQuiltflowerSettings()
+        refreshVineflowerSettings()
 
         autoUpdateCheckbox.addActionListener {
-            quiltflowerVersionComboBox.isEnabled = !autoUpdateCheckbox.isSelected
+            vineflowerVersionComboBox.isEnabled = !autoUpdateCheckbox.isSelected
         }
 
-        quiltflowerVersionComboBox.addActionListener {
-            refreshQuiltflowerSettings()
+        vineflowerVersionComboBox.addActionListener {
+            refreshVineflowerSettings()
         }
-        (quiltflowerVersionComboBox.model as QuiltflowerVersionsModel).initialize()
+        (vineflowerVersionComboBox.model as VineflowerVersionsModel).initialize()
     }
 
     fun createUIComponents() {
-        quiltflowerVersionComboBox = ComboBox(QuiltflowerVersionsModel())
+        vineflowerVersionComboBox = ComboBox(VineflowerVersionsModel())
         fetchingVersionsIcon = AsyncProcessIcon("Fetching Versions")
     }
 
-    fun refreshQuiltflowerSettings() {
-        quiltflowerSettingsPanel.removeAll()
-        if (quiltflowerVersionComboBox.selectedItem != prevQuiltflowerVersion) {
-            quiltflowerSettingsPanel.add(JBLabel("Apply settings for Quiltflower to be downloaded and settings to be displayed"))
-            quiltflowerSettingsPanel.revalidate()
-            quiltflowerSettingsPanel.repaint()
+    fun refreshVineflowerSettings() {
+        vineflowerSettingsPanel.removeAll()
+        if (vineflowerVersionComboBox.selectedItem != prevVineflowerVersion) {
+            vineflowerSettingsPanel.add(JBLabel("Apply settings for Vineflower to be downloaded and settings to be displayed"))
+            vineflowerSettingsPanel.revalidate()
+            vineflowerSettingsPanel.repaint()
             return
         }
-        val classLoader = QuiltflowerState.getInstance().getQuiltflowerClassLoader().getNow(null) ?: return
+        val classLoader = VineflowerState.getInstance().getVineflowerClassLoader().getNow(null) ?: return
         val preferencesClass = classLoader.loadClass("org.jetbrains.java.decompiler.main.extern.IFernflowerPreferences")
 
-        val fieldAnnotations = QuiltflowerPreferences.FieldAnnotations(classLoader)
+        val fieldAnnotations = VineflowerPreferences.FieldAnnotations(classLoader)
 
         @Suppress("UNCHECKED_CAST")
         val defaults = (preferencesClass.getField("DEFAULTS").get(null) as Map<String, *>).toMutableMap()
-        defaults.putAll(QuiltflowerPreferences.defaultOverrides)
+        defaults.putAll(VineflowerPreferences.defaultOverrides)
 
         class SettingsEntry(val name: String, val editComponent: JComponent, val description: String?)
         val allSettings = mutableListOf<SettingsEntry>()
@@ -85,48 +85,48 @@ class QuiltflowerSettingsPanel(var prevQuiltflowerVersion: SemVer?) {
             if (!Modifier.isStatic(field.modifiers) || field.type != String::class.java) {
                 continue
             }
-            val key = QuiltflowerPreferences.inferShortKey(field, fieldAnnotations) ?: continue
-            if (key in QuiltflowerPreferences.ignoredPreferences) {
+            val key = VineflowerPreferences.inferShortKey(field, fieldAnnotations) ?: continue
+            if (key in VineflowerPreferences.ignoredPreferences) {
                 continue
             }
-            val longKey = QuiltflowerPreferences.inferLongKey(field) ?: continue
+            val longKey = VineflowerPreferences.inferLongKey(field) ?: continue
 
-            val type = QuiltflowerPreferences.inferType(key, defaults, field, fieldAnnotations) ?: continue
-            val name = QuiltflowerPreferences.inferName(key, field, fieldAnnotations)
-            val description = QuiltflowerPreferences.inferDescription(field, fieldAnnotations)
-            val currentValue = quiltflowerSettings[key] ?: (defaults[key] ?: defaults[longKey]!!).toString()
+            val type = VineflowerPreferences.inferType(key, defaults, field, fieldAnnotations) ?: continue
+            val name = VineflowerPreferences.inferName(key, field, fieldAnnotations)
+            val description = VineflowerPreferences.inferDescription(field, fieldAnnotations)
+            val currentValue = vineflowerSettings[key] ?: (defaults[key] ?: defaults[longKey]!!).toString()
             val component = when (type) {
-                QuiltflowerPreferences.Type.BOOLEAN -> JBCheckBox().also { checkBox ->
+                VineflowerPreferences.Type.BOOLEAN -> JBCheckBox().also { checkBox ->
                     checkBox.isSelected = currentValue == "1"
                     checkBox.addActionListener {
                         val newValue = if (checkBox.isSelected) "1" else "0"
                         if (newValue != defaults[key]) {
-                            quiltflowerSettings[key] = newValue
+                            vineflowerSettings[key] = newValue
                         } else {
-                            quiltflowerSettings.remove(key)
+                            vineflowerSettings.remove(key)
                         }
                     }
                 }
-                QuiltflowerPreferences.Type.STRING -> JBTextField(currentValue).also { textField ->
+                VineflowerPreferences.Type.STRING -> JBTextField(currentValue).also { textField ->
                     textField.columns = 20
                     textField.document.addDocumentListener(object : DocumentAdapter() {
                         override fun textChanged(e: DocumentEvent) {
                             val newValue = textField.text
                             if (newValue != defaults[key]) {
-                                quiltflowerSettings[key] = newValue
+                                vineflowerSettings[key] = newValue
                             } else {
-                                quiltflowerSettings.remove(key)
+                                vineflowerSettings.remove(key)
                             }
                         }
                     })
                 }
-                QuiltflowerPreferences.Type.INTEGER -> JBIntSpinner(currentValue.toInt(), 0, Int.MAX_VALUE).also { spinner ->
+                VineflowerPreferences.Type.INTEGER -> JBIntSpinner(currentValue.toInt(), 0, Int.MAX_VALUE).also { spinner ->
                     spinner.addChangeListener {
                         val newValue = spinner.value.toString()
                         if (newValue != defaults[key]) {
-                            quiltflowerSettings[key] = newValue
+                            vineflowerSettings[key] = newValue
                         } else {
-                            quiltflowerSettings.remove(key)
+                            vineflowerSettings.remove(key)
                         }
                     }
                 }
@@ -146,20 +146,20 @@ class QuiltflowerSettingsPanel(var prevQuiltflowerVersion: SemVer?) {
             if (entry.editComponent !is JCheckBox) {
                 panel.add(entry.editComponent)
             }
-            quiltflowerSettingsPanel.add(panel)
+            vineflowerSettingsPanel.add(panel)
         }
-        quiltflowerSettingsPanel.revalidate()
-        quiltflowerSettingsPanel.repaint()
+        vineflowerSettingsPanel.revalidate()
+        vineflowerSettingsPanel.repaint()
     }
 
-    inner class QuiltflowerVersionsModel : ComboBoxModel<SemVer> {
+    inner class VineflowerVersionsModel : ComboBoxModel<SemVer> {
         private val versions = mutableListOf<SemVer>()
         private val listeners = mutableListOf<ListDataListener>()
         private var selectedItem: SemVer? = null
 
         private fun refreshVersions() {
             val (latestRelease, latestSnapshot, allRelease, allSnapshots) =
-                QuiltflowerState.getInstance().quiltflowerVersionsFuture.getNow(null) ?: return
+                VineflowerState.getInstance().vineflowerVersionsFuture.getNow(null) ?: return
             val prevSize = versions.size
             versions.clear()
             versions.addAll(allRelease)
@@ -182,13 +182,13 @@ class QuiltflowerSettingsPanel(var prevQuiltflowerVersion: SemVer?) {
             }
             when {
                 prevSelectedItem != null -> {
-                    quiltflowerVersionComboBox.selectedItem = prevSelectedItem
+                    vineflowerVersionComboBox.selectedItem = prevSelectedItem
                 }
                 autoUpdateCheckbox.isSelected -> {
-                    quiltflowerVersionComboBox.selectedItem = if (enableSnapshotsCheckbox.isSelected) latestSnapshot else latestRelease
+                    vineflowerVersionComboBox.selectedItem = if (enableSnapshotsCheckbox.isSelected) latestSnapshot else latestRelease
                 }
                 else -> {
-                    quiltflowerVersionComboBox.selectedItem = QuiltflowerState.getInstance().quiltflowerVersion
+                    vineflowerVersionComboBox.selectedItem = VineflowerState.getInstance().vineflowerVersion
                 }
             }
         }
@@ -197,7 +197,7 @@ class QuiltflowerSettingsPanel(var prevQuiltflowerVersion: SemVer?) {
             if (!fetchingVersionsIcon.isRunning) {
                 fetchingVersionsIcon.resume()
             }
-            QuiltflowerState.getInstance().quiltflowerVersionsFuture = QuiltflowerState.getInstance().downloadQuiltflowerVersions().whenComplete { _, error ->
+            VineflowerState.getInstance().vineflowerVersionsFuture = VineflowerState.getInstance().downloadVineflowerVersions().whenComplete { _, error ->
                 ApplicationManager.getApplication().invokeLater {
                     if (!fetchingVersionsIcon.isDisposed) {
                         fetchingVersionsIcon.suspend()

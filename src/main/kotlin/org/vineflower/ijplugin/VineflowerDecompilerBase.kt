@@ -1,4 +1,4 @@
-package net.earthcomputer.quiltflowerintellij
+package org.vineflower.ijplugin
 
 import com.intellij.lang.Language
 import com.intellij.openapi.application.ApplicationManager
@@ -20,10 +20,10 @@ import java.io.IOException
 import java.lang.ref.WeakReference
 import java.lang.reflect.InvocationTargetException
 
-abstract class QuiltflowerDecompilerBase : ClassFileDecompilers.Full() {
+abstract class VineflowerDecompilerBase : ClassFileDecompilers.Full() {
     companion object {
-        private val LOGGER = logger<QuiltflowerDecompilerBase>()
-        private val FILE_LANGUAGE_KEY = Key.create<Pair<WeakReference<QuiltflowerInvoker>, String>>("quiltflower.language")
+        private val LOGGER = logger<VineflowerDecompilerBase>()
+        private val FILE_LANGUAGE_KEY = Key.create<Pair<WeakReference<VineflowerInvoker>, String>>("vineflower.language")
 
         fun getText(file: VirtualFile): String {
             val indicator = ProgressManager.getInstance().progressIndicator
@@ -31,26 +31,26 @@ abstract class QuiltflowerDecompilerBase : ClassFileDecompilers.Full() {
                 indicator.text = "Decompiling ${file.name}"
             }
 
-            val quiltflowerInvoker = runCatching { QuiltflowerState.getInstance().getQuiltflowerInvoker().get() }.getOrNull()
+            val vineflowerInvoker = runCatching { VineflowerState.getInstance().getVineflowerInvoker().get() }.getOrNull()
                     ?: return LoadTextUtil.loadText(file).toString()
 
             try {
                 try {
-                    return quiltflowerInvoker.decompile(file)
+                    return vineflowerInvoker.decompile(file)
                 } catch (e: InvocationTargetException) {
                     throw e.cause ?: e
                 }
             } catch (e: ProcessCanceledException) {
                 throw e
             } catch (e: Exception) {
-                if (e.javaClass.name == "net.earthcomputer.quiltflowerintellij.impl.MyLogger\$InternalException" && e.cause is IOException) {
+                if (e.javaClass.name == "org.vineflower.ijplugin.impl.MyLogger\$InternalException" && e.cause is IOException) {
                     LOGGER.warn(file.url, e)
                     return ""
                 }
                 if (ApplicationManager.getApplication().isUnitTestMode) {
                     throw AssertionError(file.url, e)
                 }
-                return "// \$QF: cannot decompile\n${e.stackTraceToString().prependIndent("// ")}\n\n${ClsFileImpl.decompile(file)}"
+                return "// \$VF: cannot decompile\n${e.stackTraceToString().prependIndent("// ")}\n\n${ClsFileImpl.decompile(file)}"
             }
         }
     }
@@ -59,7 +59,7 @@ abstract class QuiltflowerDecompilerBase : ClassFileDecompilers.Full() {
     abstract val sourceFileType: FileType
 
     override fun accepts(file: VirtualFile): Boolean {
-        val state = QuiltflowerState.getInstance()
+        val state = VineflowerState.getInstance()
         if (!state.enabled || state.hadError) {
             return false
         }
@@ -70,17 +70,17 @@ abstract class QuiltflowerDecompilerBase : ClassFileDecompilers.Full() {
     abstract fun acceptsLanguage(language: String): Boolean
 
     private fun getLanguage(file: VirtualFile): String? {
-        val quiltflowerInvoker = runCatching { QuiltflowerState.getInstance().getQuiltflowerInvoker().join() }.getOrNull() ?: return null
+        val vineflowerInvoker = runCatching { VineflowerState.getInstance().getVineflowerInvoker().join() }.getOrNull() ?: return null
         val language = file.getUserData(FILE_LANGUAGE_KEY)
         if (language != null) {
             val (lastInvoker, lastLanguage) = language
-            if (lastInvoker.get() === quiltflowerInvoker) {
+            if (lastInvoker.get() === vineflowerInvoker) {
                 return lastLanguage
             }
         }
         return try {
-            quiltflowerInvoker.getLanguage(file).also { lang ->
-                file.putUserData(FILE_LANGUAGE_KEY, WeakReference(quiltflowerInvoker) to lang)
+            vineflowerInvoker.getLanguage(file).also { lang ->
+                file.putUserData(FILE_LANGUAGE_KEY, WeakReference(vineflowerInvoker) to lang)
             }
         } catch (e: Throwable) {
             LOGGER.error("Error while getting the language of ${file.path}", e)
@@ -99,7 +99,7 @@ abstract class QuiltflowerDecompilerBase : ClassFileDecompilers.Full() {
         physical: Boolean
     ) : SingleRootFileViewProvider(manager, file, physical, language) {
         private val textContents = ResettableLazy {
-            QuiltflowerDecompilerBase.getText(file)
+            getText(file)
         }
 
         override fun createFile(project: Project, file: VirtualFile, fileType: FileType): PsiFile {

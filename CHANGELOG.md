@@ -1,6 +1,6 @@
 <!-- Keep a Changelog guide -> https://keepachangelog.com -->
 
-# quiltflower-intellij-plugin Changelog
+# vineflower-intellij-plugin Changelog
 
 ## [Unreleased]
 

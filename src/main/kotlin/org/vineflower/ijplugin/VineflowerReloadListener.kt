@@ -1,10 +1,10 @@
-package net.earthcomputer.quiltflowerintellij
+package org.vineflower.ijplugin
 
 import com.intellij.ide.plugins.DynamicPluginListener
 import com.intellij.ide.plugins.IdeaPluginDescriptor
 
-class QuiltflowerReloadListener : DynamicPluginListener {
+class VineflowerReloadListener : DynamicPluginListener {
     override fun beforePluginLoaded(pluginDescriptor: IdeaPluginDescriptor) {
-        QuiltflowerState.getInstance().initialize()
+        VineflowerState.getInstance().initialize()
     }
 }

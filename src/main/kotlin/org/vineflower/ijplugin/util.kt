@@ -1,4 +1,4 @@
-package net.earthcomputer.quiltflowerintellij
+package org.vineflower.ijplugin
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.progress.ProgressIndicator

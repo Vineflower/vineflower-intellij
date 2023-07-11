@@ -1,1 +1,1 @@
-rootProject.name = "quiltflower-intellij-plugin"
+rootProject.name = "vineflower-intellij-plugin"

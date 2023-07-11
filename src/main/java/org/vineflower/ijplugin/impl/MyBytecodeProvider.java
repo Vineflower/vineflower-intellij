@@ -1,4 +1,4 @@
-package net.earthcomputer.quiltflowerintellij.impl;
+package org.vineflower.ijplugin.impl;
 
 import org.jetbrains.java.decompiler.main.extern.IBytecodeProvider;
 

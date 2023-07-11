@@ -1,4 +1,4 @@
-package net.earthcomputer.quiltflowerintellij
+package org.vineflower.ijplugin
 
 import com.intellij.execution.filters.LineNumbersMapping
 import com.intellij.ide.highlighter.JavaClassFileType
@@ -24,16 +24,16 @@ import java.util.function.Predicate
 
 private typealias ReadActionRunner = (() -> Unit) -> Unit
 
-class QuiltflowerInvoker(classLoader: ClassLoader) {
+class VineflowerInvoker(classLoader: ClassLoader) {
     companion object {
-        private val LOGGER = logger<QuiltflowerInvoker>()
+        private val LOGGER = logger<VineflowerInvoker>()
     }
 
-    private val myBytecodeProviderCtor = classLoader.loadClass("net.earthcomputer.quiltflowerintellij.impl.MyBytecodeProvider")
+    private val myBytecodeProviderCtor = classLoader.loadClass("org.vineflower.ijplugin.impl.MyBytecodeProvider")
         .getDeclaredConstructor(java.util.Map::class.java)
         .apply { isAccessible = true }
 
-    private val myResultSaverClass = classLoader.loadClass("net.earthcomputer.quiltflowerintellij.impl.MyResultSaver")
+    private val myResultSaverClass = classLoader.loadClass("org.vineflower.ijplugin.impl.MyResultSaver")
     private val myResultSaverCtor = myResultSaverClass
         .getDeclaredConstructor()
         .apply { isAccessible = true }
@@ -42,7 +42,7 @@ class QuiltflowerInvoker(classLoader: ClassLoader) {
     private val myResultSaverResult = myResultSaverClass.getDeclaredField("myResult")
         .apply { isAccessible = true }
 
-    private val myLogger = classLoader.loadClass("net.earthcomputer.quiltflowerintellij.impl.MyLogger")
+    private val myLogger = classLoader.loadClass("org.vineflower.ijplugin.impl.MyLogger")
         .getDeclaredConstructor(
             Consumer::class.java,
             BiConsumer::class.java,
@@ -90,9 +90,9 @@ class QuiltflowerInvoker(classLoader: ClassLoader) {
         val resultSaver = myResultSaverCtor.newInstance()
 
         // gather the options, enforce overrides
-        val options = QuiltflowerState.getInstance().quiltflowerSettings.toMutableMap()
-        options.keys.removeAll(QuiltflowerPreferences.ignoredPreferences)
-        for ((k, v) in QuiltflowerPreferences.defaultOverrides) {
+        val options = VineflowerState.getInstance().vineflowerSettings.toMutableMap()
+        options.keys.removeAll(VineflowerPreferences.ignoredPreferences)
+        for ((k, v) in VineflowerPreferences.defaultOverrides) {
             options.putIfAbsent(k, v.toString())
         }
         options.compute("ind") { _, v -> if (v == null) null else " ".repeat(v.toInt()) } // indent
@@ -224,7 +224,7 @@ class QuiltflowerInvoker(classLoader: ClassLoader) {
             iContextSourceClass.getMethod("isLazy")
         }
 
-        val myContextSourceCtor = classLoader.loadClass("net.earthcomputer.quiltflowerintellij.impl.MyContextSource")
+        val myContextSourceCtor = classLoader.loadClass("org.vineflower.ijplugin.impl.MyContextSource")
             .getDeclaredConstructor(
                 Predicate::class.java,
                 java.util.function.Function::class.java

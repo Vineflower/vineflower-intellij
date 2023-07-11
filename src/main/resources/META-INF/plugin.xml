@@ -1,24 +1,24 @@
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
     <id>net.earthcomputer.quiltflowerintellij</id>
-    <name>Quiltflower</name>
+    <name>Vineflower</name>
     <vendor>Earthcomputer</vendor>
 
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.java</depends>
 
     <applicationListeners>
-        <listener class="net.earthcomputer.quiltflowerintellij.QuiltflowerPreloader" topic="com.intellij.ide.AppLifecycleListener"/>
-        <listener class="net.earthcomputer.quiltflowerintellij.QuiltflowerReloadListener" topic="com.intellij.ide.plugins.DynamicPluginListener"/>
+        <listener class="org.vineflower.ijplugin.VineflowerPreloader" topic="com.intellij.ide.AppLifecycleListener"/>
+        <listener class="org.vineflower.ijplugin.VineflowerReloadListener" topic="com.intellij.ide.plugins.DynamicPluginListener"/>
     </applicationListeners>
 
     <extensions defaultExtensionNs="com.intellij">
         <applicationConfigurable
                 parentId="tools"
-                instance="net.earthcomputer.quiltflowerintellij.QuiltflowerSettings"
-                id="net.earthcomputer.quiltflowerintellij.QuiltflowerSettings"
-                displayName="Quiltflower"/>
-        <applicationService serviceImplementation="net.earthcomputer.quiltflowerintellij.QuiltflowerState"/>
-        <psi.classFileDecompiler implementation="net.earthcomputer.quiltflowerintellij.QuiltflowerDecompilerLight" order="first"/>
+                instance="org.vineflower.ijplugin.VineflowerSettings"
+                id="org.vineflower.ijplugin.VineflowerSettings"
+                displayName="Vineflower"/>
+        <applicationService serviceImplementation="org.vineflower.ijplugin.VineflowerState"/>
+        <psi.classFileDecompiler implementation="org.vineflower.ijplugin.VineflowerDecompilerLight" order="first"/>
     </extensions>
 </idea-plugin>

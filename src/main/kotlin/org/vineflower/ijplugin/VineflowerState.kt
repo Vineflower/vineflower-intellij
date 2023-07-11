@@ -1,4 +1,4 @@
-package net.earthcomputer.quiltflowerintellij
+package org.vineflower.ijplugin
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.PathManager
@@ -10,6 +10,7 @@ import com.intellij.openapi.util.JDOMUtil
 import com.intellij.util.io.readText
 import com.intellij.util.text.SemVer
 import com.intellij.util.xmlb.XmlSerializerUtil
+import com.intellij.util.xmlb.annotations.Tag
 import com.intellij.util.xmlb.annotations.Transient
 import java.io.FileNotFoundException
 import java.net.HttpURLConnection
@@ -29,7 +30,7 @@ import kotlin.io.path.exists
     name = "net.earthcomputer.quiltflowerintellij.QuiltflowerState",
     storages = [Storage("quiltflower.xml")]
 )
-class QuiltflowerState : PersistentStateComponent<QuiltflowerState> {
+class VineflowerState : PersistentStateComponent<VineflowerState> {
     @JvmField
     var enabled: Boolean = true
     @JvmField
@@ -37,35 +38,37 @@ class QuiltflowerState : PersistentStateComponent<QuiltflowerState> {
     @JvmField
     var enableSnapshots: Boolean = false
     @JvmField
-    var quiltflowerVersionStr: String? = null
+    @Tag("quiltflowerVersionStr")
+    var vineflowerVersionStr: String? = null
     @JvmField
     var releaseBaseUrl: String = "https://maven.quiltmc.org/repository/release/org/quiltmc/quiltflower/"
     @JvmField
     var snapshotsBaseUrl: String = "https://maven.quiltmc.org/repository/snapshot/org/quiltmc/quiltflower/"
     @JvmField
-    var quiltflowerSettings: MutableMap<String, String> = mutableMapOf()
+    @Tag("quiltflowerSettings")
+    var vineflowerSettings: MutableMap<String, String> = mutableMapOf()
 
     @Transient
     private var hasInitialized = false
 
     @Transient
     @JvmField
-    var quiltflowerVersionsFuture: CompletableFuture<QuiltflowerVersions> = CompletableFuture.completedFuture(QuiltflowerVersions(null, null, listOf(), listOf()))
+    var vineflowerVersionsFuture: CompletableFuture<VineflowerVersions> = CompletableFuture.completedFuture(VineflowerVersions(null, null, listOf(), listOf()))
     @Transient
     @JvmField
     var hadError = false
     @Transient
-    private var downloadedQuiltflowerFuture: CompletableFuture<Path>? = null
+    private var downloadedVineflowerFuture: CompletableFuture<Path>? = null
     @Transient
-    private var quiltflowerClassLoaderFuture: CompletableFuture<URLClassLoader>? = null
+    private var vineflowerClassLoaderFuture: CompletableFuture<URLClassLoader>? = null
     @Transient
-    private var quiltflowerInvokerFuture: CompletableFuture<QuiltflowerInvoker>? = null
+    private var vineflowerInvokerFuture: CompletableFuture<VineflowerInvoker>? = null
 
     @get:Transient
-    var quiltflowerVersion: SemVer?
-        get() = SemVer.parseFromText(quiltflowerVersionStr)
+    var vineflowerVersion: SemVer?
+        get() = SemVer.parseFromText(vineflowerVersionStr)
         set(value) {
-            quiltflowerVersionStr = value?.toString()
+            vineflowerVersionStr = value?.toString()
         }
 
     fun initialize() {
@@ -73,44 +76,44 @@ class QuiltflowerState : PersistentStateComponent<QuiltflowerState> {
             return
         }
         hasInitialized = true
-        quiltflowerVersionsFuture = downloadQuiltflowerVersions()
-        downloadQuiltflower().whenComplete { path, error ->
+        vineflowerVersionsFuture = downloadVineflowerVersions()
+        downloadVineflower().whenComplete { path, error ->
             if (error != null) {
-                LOGGER.error("Failed to download Quiltflower", error)
+                LOGGER.error("Failed to download Vineflower", error)
             } else {
-                LOGGER.info("Successfully downloaded Quiltflower to $path")
+                LOGGER.info("Successfully downloaded Vineflower to $path")
             }
         }
     }
 
     override fun getState() = this
 
-    override fun loadState(state: QuiltflowerState) {
+    override fun loadState(state: VineflowerState) {
         XmlSerializerUtil.copyBean(state, this)
     }
 
-    fun getQuiltflowerInvoker(): CompletableFuture<QuiltflowerInvoker> {
+    fun getVineflowerInvoker(): CompletableFuture<VineflowerInvoker> {
         synchronized(this) {
-            if (quiltflowerInvokerFuture != null) {
-                return quiltflowerInvokerFuture!!
+            if (vineflowerInvokerFuture != null) {
+                return vineflowerInvokerFuture!!
             }
-            return getQuiltflowerClassLoader().thenApply { classLoader ->
+            return getVineflowerClassLoader().thenApply { classLoader ->
                 try {
-                    QuiltflowerInvoker(classLoader)
+                    VineflowerInvoker(classLoader)
                 } catch (e: Throwable) {
                     hadError = true
                     throw e
                 }
-            }.also { quiltflowerInvokerFuture = it }
+            }.also { vineflowerInvokerFuture = it }
         }
     }
 
-    fun getQuiltflowerClassLoader(): CompletableFuture<URLClassLoader> {
+    fun getVineflowerClassLoader(): CompletableFuture<URLClassLoader> {
         synchronized(this) {
-            if (quiltflowerClassLoaderFuture != null) {
-                return quiltflowerClassLoaderFuture!!
+            if (vineflowerClassLoaderFuture != null) {
+                return vineflowerClassLoaderFuture!!
             }
-            return downloadQuiltflower().thenApply { path ->
+            return downloadVineflower().thenApply { path ->
                 try {
                     var pluginJar = javaClass.getResource("/${javaClass.name.replace('.', '/')}.class")!!.toString()
                     if (pluginJar.startsWith("jar:") && pluginJar.endsWith(".class")) {
@@ -124,25 +127,25 @@ class QuiltflowerState : PersistentStateComponent<QuiltflowerState> {
                     hadError = true
                     throw e
                 }
-            }.also { quiltflowerClassLoaderFuture = it }
+            }.also { vineflowerClassLoaderFuture = it }
         }
     }
 
-    fun downloadQuiltflower(): CompletableFuture<Path> {
+    fun downloadVineflower(): CompletableFuture<Path> {
         synchronized(this) {
-            if (!hadError && downloadedQuiltflowerFuture != null) {
-                return downloadedQuiltflowerFuture!!
+            if (!hadError && downloadedVineflowerFuture != null) {
+                return downloadedVineflowerFuture!!
             }
-            val oldClassLoader = this.quiltflowerClassLoaderFuture
-            this.quiltflowerClassLoaderFuture = null
-            this.quiltflowerInvokerFuture = null
+            val oldClassLoader = this.vineflowerClassLoaderFuture
+            this.vineflowerClassLoaderFuture = null
+            this.vineflowerInvokerFuture = null
             oldClassLoader?.whenComplete { loader, _ -> loader.close() }
             this.hadError = false
-            val future = quiltflowerVersionsFuture.thenCompose { quiltflowerVersions ->
+            val future = vineflowerVersionsFuture.thenCompose { vineflowerVersions ->
                 val future = CompletableFuture<Path>()
-                runOnBackgroundThreadWithProgress("Downloading Quiltflower") download@{
+                runOnBackgroundThreadWithProgress("Downloading Vineflower") download@{
                     try {
-                        val jarFile = doQuiltflowerDownload(quiltflowerVersions) ?: return@download
+                        val jarFile = doVineflowerDownload(vineflowerVersions) ?: return@download
                         future.complete(jarFile)
                     } catch (e: Throwable) {
                         hadError = true
@@ -152,21 +155,21 @@ class QuiltflowerState : PersistentStateComponent<QuiltflowerState> {
                 future
             }
 
-            this.downloadedQuiltflowerFuture = future
+            this.downloadedVineflowerFuture = future
 
             return future
         }
     }
 
-    private fun doQuiltflowerDownload(quiltflowerVersions: QuiltflowerVersions): Path? {
-        val jarsDir = PathManager.getConfigDir().resolve("quiltflower").resolve("jars")
+    private fun doVineflowerDownload(vineflowerVersions: VineflowerVersions): Path? {
+        val jarsDir = PathManager.getConfigDir().resolve("vineflower").resolve("jars")
 
-        val version = quiltflowerVersion ?: run {
+        val version = vineflowerVersion ?: run {
             // we may be offline, try to find latest version from file system
             val versions = Files.list(jarsDir).use { subFiles ->
                 subFiles
                         .map { it.fileName.toString() }
-                        .filter { it.startsWith("quiltflower-") && it.endsWith(".jar") }
+                        .filter { it.startsWith("vineflower-") && it.endsWith(".jar") }
                         .map { it.substring(12, it.length - 4) }
                         .filter { enableSnapshots || !it.contains('-') }
                         .map(SemVer::parseFromText)
@@ -177,14 +180,14 @@ class QuiltflowerState : PersistentStateComponent<QuiltflowerState> {
             versions.maxOrNull() ?: throw Throwable()
         }
 
-        val jarFile = jarsDir.resolve("quiltflower-$version.jar")
-        val etagFile = jarsDir.resolve("quiltflower-$version.etag")
+        val jarFile = jarsDir.resolve("vineflower-$version.jar")
+        val etagFile = jarsDir.resolve("vineflower-$version.etag")
 
         // read the etag
         val etag = if (jarFile.exists() && etagFile.exists()) etagFile.readText() else null
 
         // decide which repo to use based on whether we're a snapshot or release
-        val urlStr = if (version in quiltflowerVersions.allReleases) {
+        val urlStr = if (version in vineflowerVersions.allReleases) {
             "$releaseBaseUrl$version/quiltflower-$version.jar"
         } else {
             val snapshotVersion = version.toString().substringBefore("-") + "-SNAPSHOT"
@@ -192,7 +195,7 @@ class QuiltflowerState : PersistentStateComponent<QuiltflowerState> {
         }
 
         // setup the connection and connect
-        val connection = URL(urlStr).openQuiltflowerConnection()
+        val connection = URL(urlStr).openVineflowerConnection()
         if (etag != null) {
             connection.setRequestProperty("If-None-Match", etag)
         }
@@ -209,11 +212,11 @@ class QuiltflowerState : PersistentStateComponent<QuiltflowerState> {
         // read the response
         val responseCode = connection.responseCode
         if (responseCode == HttpURLConnection.HTTP_NOT_MODIFIED) {
-            LOGGER.info("Quiltflower $version already downloaded")
+            LOGGER.info("Vineflower $version already downloaded")
             return jarFile
         }
         if (responseCode != HttpURLConnection.HTTP_OK) {
-            LOGGER.error("Failed to download quiltflower $version from $urlStr: $responseCode")
+            LOGGER.error("Failed to download Vineflower $version from $urlStr: $responseCode")
             hadError = true
             throw Throwable()
         }
@@ -239,7 +242,7 @@ class QuiltflowerState : PersistentStateComponent<QuiltflowerState> {
         val latestVersion: SemVer?
         val allVersions: List<SemVer>
         try {
-            URL(baseUrl + "maven-metadata.xml").openQuiltflowerConnection().inputStream.use { inputStream ->
+            URL(baseUrl + "maven-metadata.xml").openVineflowerConnection().inputStream.use { inputStream ->
                 val element = JDOMUtil.load(inputStream)
                 if (element.name != "metadata") {
                     throw IllegalStateException("Invalid metadata file")
@@ -257,15 +260,15 @@ class QuiltflowerState : PersistentStateComponent<QuiltflowerState> {
         return MavenMetadataInfo(latestVersion, allVersions)
     }
 
-    fun downloadQuiltflowerVersions(): CompletableFuture<QuiltflowerVersions> {
-        val future = CompletableFuture<QuiltflowerVersions>()
+    fun downloadVineflowerVersions(): CompletableFuture<VineflowerVersions> {
+        val future = CompletableFuture<VineflowerVersions>()
 
-        runOnBackgroundThreadWithProgress("Fetching Quiltflower versions") {
+        runOnBackgroundThreadWithProgress("Fetching Vineflower versions") {
             try {
                 val (latestVersion, allVersions) = downloadMavenMetadata(releaseBaseUrl)
                 val (latestSnapshot, allSnapshots) = downloadMavenMetadata(snapshotsBaseUrl)
                 val snapshotSubversions = downloadSnapshotSubversions(allSnapshots)
-                val result = QuiltflowerVersions(
+                val result = VineflowerVersions(
                     latestVersion,
                     SemVer.parseFromText(snapshotSubversions[latestSnapshot]?.first),
                     allVersions,
@@ -273,8 +276,8 @@ class QuiltflowerState : PersistentStateComponent<QuiltflowerState> {
                         snapshotSubversions[it]?.second?.mapNotNull(SemVer::parseFromText) ?: emptyList()
                     }
                 )
-                if (quiltflowerVersion == null || autoUpdate) {
-                    quiltflowerVersion = if (enableSnapshots) {
+                if (vineflowerVersion == null || autoUpdate) {
+                    vineflowerVersion = if (enableSnapshots) {
                         result.latestSnapshot
                     } else {
                         result.latestRelease
@@ -294,7 +297,7 @@ class QuiltflowerState : PersistentStateComponent<QuiltflowerState> {
             CompletableFuture.supplyAsync({
                 val latest: String
                 val all: List<String>
-                URL("${snapshotsBaseUrl}$snapshot/maven-metadata.xml").openQuiltflowerConnection()
+                URL("${snapshotsBaseUrl}$snapshot/maven-metadata.xml").openVineflowerConnection()
                         .inputStream.use { inputStream ->
                             val element = JDOMUtil.load(inputStream)
                             if (element.name != "metadata") {
@@ -324,23 +327,23 @@ class QuiltflowerState : PersistentStateComponent<QuiltflowerState> {
         return snapshotSubversionFutures.map { (key, value) -> key to value.join() }.toMap()
     }
 
-    private fun URL.openQuiltflowerConnection() =
-        this.openConnection().apply { setRequestProperty("User-Agent", "Quiltflower IntelliJ Plugin") } as HttpURLConnection
+    private fun URL.openVineflowerConnection() =
+        this.openConnection().apply { setRequestProperty("User-Agent", "Vineflower IntelliJ Plugin") } as HttpURLConnection
 
     companion object {
-        private val LOGGER = logger<QuiltflowerState>()
+        private val LOGGER = logger<VineflowerState>()
 
         private val snapshotDownloadPool = Executors.newFixedThreadPool(4)
 
-        fun getInstance(): QuiltflowerState {
-            return ApplicationManager.getApplication().getService(QuiltflowerState::class.java)
+        fun getInstance(): VineflowerState {
+            return ApplicationManager.getApplication().getService(VineflowerState::class.java)
         }
     }
 }
 
 data class MavenMetadataInfo(val latestVersion: SemVer?, val allVersions: List<SemVer>)
 
-data class QuiltflowerVersions(
+data class VineflowerVersions(
     val latestRelease: SemVer?,
     val latestSnapshot: SemVer?,
     val allReleases: List<SemVer>,

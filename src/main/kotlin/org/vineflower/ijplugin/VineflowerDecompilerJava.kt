@@ -1,4 +1,4 @@
-package net.earthcomputer.quiltflowerintellij
+package org.vineflower.ijplugin
 
 import com.intellij.ide.highlighter.JavaFileType
 import com.intellij.lang.java.JavaLanguage
@@ -8,7 +8,7 @@ import com.intellij.psi.compiled.ClsStubBuilder
 import com.intellij.psi.impl.compiled.ClsFileImpl
 
 // TODO: full decompilers
-class QuiltflowerDecompilerJava : QuiltflowerDecompilerBase() {
+class VineflowerDecompilerJava : VineflowerDecompilerBase() {
     private val myStubBuilder = Class.forName("com.intellij.psi.impl.compiled.ClsDecompilerImpl\$MyClsStubBuilder")
         .getDeclaredConstructor()
         .apply { isAccessible = true }
