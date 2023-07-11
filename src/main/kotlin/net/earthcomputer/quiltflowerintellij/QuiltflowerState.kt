@@ -58,6 +58,8 @@ class QuiltflowerState : PersistentStateComponent<QuiltflowerState> {
     private var downloadedQuiltflowerFuture: CompletableFuture<Path>? = null
     @Transient
     private var quiltflowerClassLoaderFuture: CompletableFuture<URLClassLoader>? = null
+    @Transient
+    private var quiltflowerInvokerFuture: CompletableFuture<QuiltflowerInvoker>? = null
 
     @get:Transient
     var quiltflowerVersion: SemVer?
@@ -85,6 +87,22 @@ class QuiltflowerState : PersistentStateComponent<QuiltflowerState> {
 
     override fun loadState(state: QuiltflowerState) {
         XmlSerializerUtil.copyBean(state, this)
+    }
+
+    fun getQuiltflowerInvoker(): CompletableFuture<QuiltflowerInvoker> {
+        synchronized(this) {
+            if (quiltflowerInvokerFuture != null) {
+                return quiltflowerInvokerFuture!!
+            }
+            return getQuiltflowerClassLoader().thenApply { classLoader ->
+                try {
+                    QuiltflowerInvoker(classLoader)
+                } catch (e: Throwable) {
+                    hadError = true
+                    throw e
+                }
+            }.also { quiltflowerInvokerFuture = it }
+        }
     }
 
     fun getQuiltflowerClassLoader(): CompletableFuture<URLClassLoader> {
@@ -117,6 +135,7 @@ class QuiltflowerState : PersistentStateComponent<QuiltflowerState> {
             }
             val oldClassLoader = this.quiltflowerClassLoaderFuture
             this.quiltflowerClassLoaderFuture = null
+            this.quiltflowerInvokerFuture = null
             oldClassLoader?.whenComplete { loader, _ -> loader.close() }
             this.hadError = false
             val future = quiltflowerVersionsFuture.thenCompose { quiltflowerVersions ->

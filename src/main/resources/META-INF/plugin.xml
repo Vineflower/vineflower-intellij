@@ -19,6 +19,6 @@
                 id="net.earthcomputer.quiltflowerintellij.QuiltflowerSettings"
                 displayName="Quiltflower"/>
         <applicationService serviceImplementation="net.earthcomputer.quiltflowerintellij.QuiltflowerState"/>
-        <psi.classFileDecompiler implementation="net.earthcomputer.quiltflowerintellij.QuiltflowerDecompiler" order="first"/>
+        <psi.classFileDecompiler implementation="net.earthcomputer.quiltflowerintellij.QuiltflowerDecompilerLight" order="first"/>
     </extensions>
 </idea-plugin>
