@@ -158,13 +158,13 @@ class VineflowerSettingsPanel(var prevVineflowerVersion: SemVer?) {
         private var selectedItem: SemVer? = null
 
         private fun refreshVersions() {
-            val (latestRelease, latestSnapshot, allRelease, allSnapshots) =
+            val (latestRelease, latestSnapshot, newReleases, newSnapshots, legacyReleases, legacySnapshots) =
                 VineflowerState.getInstance().vineflowerVersionsFuture.getNow(null) ?: return
             val prevSize = versions.size
             versions.clear()
-            versions.addAll(allRelease)
+            versions.addAll(newReleases + legacyReleases)
             if (enableSnapshotsCheckbox.isSelected) {
-                versions.addAll(allSnapshots)
+                versions.addAll(newSnapshots + legacySnapshots)
             }
             val prevSelectedItem = selectedItem
             if (prevSelectedItem != null && prevSelectedItem !in versions) {

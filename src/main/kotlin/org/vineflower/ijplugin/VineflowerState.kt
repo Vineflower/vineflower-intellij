@@ -41,9 +41,13 @@ class VineflowerState : PersistentStateComponent<VineflowerState> {
     @Tag("quiltflowerVersionStr")
     var vineflowerVersionStr: String? = null
     @JvmField
-    var releaseBaseUrl: String = "https://maven.quiltmc.org/repository/release/org/quiltmc/quiltflower/"
+    var legacyReleaseBaseUrl: String = "https://maven.quiltmc.org/repository/release/org/quiltmc/quiltflower/"
     @JvmField
-    var snapshotsBaseUrl: String = "https://maven.quiltmc.org/repository/snapshot/org/quiltmc/quiltflower/"
+    var legacySnapshotsBaseUrl: String = "https://maven.quiltmc.org/repository/snapshot/org/quiltmc/quiltflower/"
+    @JvmField
+    var newReleaseBaseUrl: String = "https://s01.oss.sonatype.org/service/local/repositories/releases/content/org/vineflower/vineflower/"
+    @JvmField
+    var newSnapshotsBaseUrl: String = "https://s01.oss.sonatype.org/service/local/repositories/snapshots/content/org/vineflower/vineflower/"
     @JvmField
     @Tag("quiltflowerSettings")
     var vineflowerSettings: MutableMap<String, String> = mutableMapOf()
@@ -53,7 +57,7 @@ class VineflowerState : PersistentStateComponent<VineflowerState> {
 
     @Transient
     @JvmField
-    var vineflowerVersionsFuture: CompletableFuture<VineflowerVersions> = CompletableFuture.completedFuture(VineflowerVersions(null, null, listOf(), listOf()))
+    var vineflowerVersionsFuture: CompletableFuture<VineflowerVersions> = CompletableFuture.completedFuture(VineflowerVersions(null, null, listOf(), listOf(), listOf(), listOf()))
     @Transient
     @JvmField
     var hadError = false
@@ -187,11 +191,16 @@ class VineflowerState : PersistentStateComponent<VineflowerState> {
         val etag = if (jarFile.exists() && etagFile.exists()) etagFile.readText() else null
 
         // decide which repo to use based on whether we're a snapshot or release
-        val urlStr = if (version in vineflowerVersions.allReleases) {
-            "$releaseBaseUrl$version/quiltflower-$version.jar"
+        val urlStr = if (version in vineflowerVersions.newReleases) {
+            "$newReleaseBaseUrl$version/vineflower-$version.jar"
+        } else if (version in vineflowerVersions.oldReleases) {
+            "$legacyReleaseBaseUrl$version/quiltflower-$version.jar"
+        } else if (version in vineflowerVersions.newSnapshots) {
+            val snapshotVersion = version.toString().substringBefore("-") + "-SNAPSHOT"
+            "$newSnapshotsBaseUrl$snapshotVersion/vineflower-$version.jar"
         } else {
             val snapshotVersion = version.toString().substringBefore("-") + "-SNAPSHOT"
-            "$snapshotsBaseUrl$snapshotVersion/quiltflower-$version.jar"
+            "$legacySnapshotsBaseUrl$snapshotVersion/quiltflower-$version.jar"
         }
 
         // setup the connection and connect
@@ -265,14 +274,20 @@ class VineflowerState : PersistentStateComponent<VineflowerState> {
 
         runOnBackgroundThreadWithProgress("Fetching Vineflower versions") {
             try {
-                val (latestVersion, allVersions) = downloadMavenMetadata(releaseBaseUrl)
-                val (latestSnapshot, allSnapshots) = downloadMavenMetadata(snapshotsBaseUrl)
-                val snapshotSubversions = downloadSnapshotSubversions(allSnapshots)
+                val (latestVersion, newReleases) = downloadMavenMetadata(newReleaseBaseUrl)
+                val (latestSnapshot, newSnapshots) = downloadMavenMetadata(newSnapshotsBaseUrl)
+                val legacyReleases = downloadMavenMetadata(legacyReleaseBaseUrl).allVersions
+                val legacySnapshots = downloadMavenMetadata(legacySnapshotsBaseUrl).allVersions
+                val snapshotSubversions = downloadSnapshotSubversions(newSnapshots, legacySnapshots - newSnapshots.toSet())
                 val result = VineflowerVersions(
                     latestVersion,
                     SemVer.parseFromText(snapshotSubversions[latestSnapshot]?.first),
-                    allVersions,
-                    allSnapshots.flatMap {
+                    newReleases,
+                    newSnapshots.flatMap {
+                        snapshotSubversions[it]?.second?.mapNotNull(SemVer::parseFromText) ?: emptyList()
+                    },
+                    legacyReleases,
+                    (legacySnapshots - newSnapshots.toSet()).flatMap {
                         snapshotSubversions[it]?.second?.mapNotNull(SemVer::parseFromText) ?: emptyList()
                     }
                 )
@@ -292,37 +307,40 @@ class VineflowerState : PersistentStateComponent<VineflowerState> {
         return future
     }
 
-    private fun downloadSnapshotSubversions(allSnapshots: List<SemVer>): Map<SemVer, Pair<String, List<String>>> {
-        val snapshotSubversionFutures = allSnapshots.associateWith { snapshot ->
-            CompletableFuture.supplyAsync({
-                val latest: String
-                val all: List<String>
-                URL("${snapshotsBaseUrl}$snapshot/maven-metadata.xml").openVineflowerConnection()
-                        .inputStream.use { inputStream ->
-                            val element = JDOMUtil.load(inputStream)
-                            if (element.name != "metadata") {
-                                throw IllegalStateException("Invalid metadata file")
-                            }
-                            val versioning = element.getChild("versioning")
-                                    ?: throw IllegalStateException("Invalid metadata file")
-                            val latestSnapshotVer = versioning.getChild("snapshot")
-                                    ?: throw IllegalStateException("Invalid metadata file")
-                            val timestamp = latestSnapshotVer.getChild("timestamp")?.text
-                                    ?: throw IllegalStateException("Invalid metadata file")
-                            val buildNumber = latestSnapshotVer.getChild("buildNumber")?.text
-                                    ?: throw IllegalStateException("Invalid metadata file")
-                            latest = "${snapshot.toString().replace("-SNAPSHOT", "")}-$timestamp-$buildNumber"
-                            all = versioning.getChild("snapshotVersions")?.children?.mapNotNull {
-                                if (it.getChild("extension")?.text == "jar" && it.getChild("classifier") == null) {
-                                    it.getChild("value")?.text
-                                } else {
-                                    null
+    private fun downloadSnapshotSubversions(newSnapshots: List<SemVer>, legacySnapshots: List<SemVer>): Map<SemVer, Pair<String, List<String>>> {
+        val snapshotSubversionFutures = mapOf((newSnapshots to newSnapshotsBaseUrl), (legacySnapshots to legacySnapshotsBaseUrl))
+            .map { (snapshots, baseUrl) -> snapshots.associateWith { snapshot ->
+                CompletableFuture.supplyAsync({
+                    val latest: String
+                    val all: List<String>
+                    URL("${baseUrl}$snapshot/maven-metadata.xml").openVineflowerConnection()
+                            .inputStream.use { inputStream ->
+                                val element = JDOMUtil.load(inputStream)
+                                if (element.name != "metadata") {
+                                    throw IllegalStateException("Invalid metadata file")
                                 }
-                            } ?: emptyList()
-                        }
-                (latest to all)
-            }, snapshotDownloadPool)
-        }
+                                val versioning = element.getChild("versioning")
+                                        ?: throw IllegalStateException("Invalid metadata file")
+                                val latestSnapshotVer = versioning.getChild("snapshot")
+                                        ?: throw IllegalStateException("Invalid metadata file")
+                                val timestamp = latestSnapshotVer.getChild("timestamp")?.text
+                                        ?: throw IllegalStateException("Invalid metadata file")
+                                val buildNumber = latestSnapshotVer.getChild("buildNumber")?.text
+                                        ?: throw IllegalStateException("Invalid metadata file")
+                                latest = "${snapshot.toString().replace("-SNAPSHOT", "")}-$timestamp-$buildNumber"
+                                all = versioning.getChild("snapshotVersions")?.children?.mapNotNull {
+                                    if (it.getChild("extension")?.text == "jar" && it.getChild("classifier") == null) {
+                                        it.getChild("value")?.text
+                                    } else {
+                                        null
+                                    }
+                                } ?: emptyList()
+                            }
+                    (latest to all)
+                }, snapshotDownloadPool)
+            } }
+            .reduce { new, legacy -> new + legacy }
+
         CompletableFuture.allOf(*snapshotSubversionFutures.values.toTypedArray()).join()
         return snapshotSubversionFutures.map { (key, value) -> key to value.join() }.toMap()
     }
@@ -346,6 +364,8 @@ data class MavenMetadataInfo(val latestVersion: SemVer?, val allVersions: List<S
 data class VineflowerVersions(
     val latestRelease: SemVer?,
     val latestSnapshot: SemVer?,
-    val allReleases: List<SemVer>,
-    val allSnapshots: List<SemVer>
+    val newReleases: List<SemVer>,
+    val newSnapshots: List<SemVer>,
+    val oldReleases: List<SemVer>,
+    val oldSnapshots: List<SemVer>
 )
