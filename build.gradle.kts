@@ -1,5 +1,7 @@
 import org.jetbrains.changelog.markdownToHTML
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
+import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 fun properties(key: String) = project.findProperty(key)?.toString() ?: ""
@@ -70,8 +72,8 @@ tasks {
             targetCompatibility = it
         }
         withType<KotlinCompile> {
-            kotlinOptions.jvmTarget = it
-            kotlinOptions.freeCompilerArgs += listOf("-Xjvm-default=all-compatibility")
+            compilerOptions.jvmTarget = JvmTarget.fromTarget(it)
+            compilerOptions.jvmDefault.set(JvmDefaultMode.ENABLE)
         }
     }
 
