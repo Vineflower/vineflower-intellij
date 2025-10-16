@@ -59,7 +59,6 @@ dependencies {
         bundledPlugins(properties("platformBundledPlugins").split(',').map(String::trim).filter(String::isNotEmpty))
 
         pluginVerifier()
-        instrumentationTools()
         zipSigner()
     }
 }
