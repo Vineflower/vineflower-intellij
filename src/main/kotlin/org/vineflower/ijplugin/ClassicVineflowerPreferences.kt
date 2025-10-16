@@ -158,7 +158,7 @@ object ClassicVineflowerPreferences : VineflowerPreferences() {
             return nameOverride
         }
 
-        return StringUtil.toTitleCase(field.name.replace("_", " ").toLowerCase(Locale.ROOT))
+        return StringUtil.toTitleCase(field.name.replace("_", " ").lowercase(Locale.ROOT))
     }
 
     private fun inferDescription(field: Field, fieldAnnotations: FieldAnnotations): String? {
