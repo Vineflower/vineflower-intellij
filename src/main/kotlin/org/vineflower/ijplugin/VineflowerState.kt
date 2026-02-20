@@ -45,9 +45,9 @@ class VineflowerState : PersistentStateComponent<VineflowerState> {
     @JvmField
     var legacySnapshotsBaseUrl: String = "https://maven.quiltmc.org/repository/snapshot/org/quiltmc/quiltflower/"
     @JvmField
-    var newReleaseBaseUrl: String = "https://s01.oss.sonatype.org/service/local/repositories/releases/content/org/vineflower/vineflower/"
+    var newReleaseBaseUrl: String = "https://repo1.maven.org/maven2/org/vineflower/vineflower/"
     @JvmField
-    var newSnapshotsBaseUrl: String = "https://s01.oss.sonatype.org/service/local/repositories/snapshots/content/org/vineflower/vineflower/"
+    var newSnapshotsBaseUrl: String = "https://central.sonatype.com/repository/maven-snapshots/org/vineflower/vineflower/"
     @JvmField
     @Tag("quiltflowerSettings")
     var vineflowerSettings: MutableMap<String, String> = mutableMapOf()
