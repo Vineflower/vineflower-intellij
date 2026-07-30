@@ -102,7 +102,7 @@ class VineflowerInvoker(classLoader: ClassLoader) {
             options["__dump_original_lines__"] = "1"
         }
 
-        fun doDecompile(readActionRunner: ReadActionRunner) {
+        fun doDecompile(readActionRunner: ReadActionRunner, project: Project?) {
             // construct the decompiler
             val decompiler = baseDecompilerCtor.newInstance(bytecodeProvider, resultSaver, options, myLogger)
 
@@ -111,7 +111,6 @@ class VineflowerInvoker(classLoader: ClassLoader) {
 
             // check if library API is available
             if (contextSourceFeature != null) {
-                val project = ProjectLocator.getInstance().guessProjectForFile(file)
                 if (project != null) {
                     val myContextSource = contextSourceFeature.myContextSourceCtor.newInstance(
                             Predicate<String> { doesClassExist(project, it, readActionRunner) },
@@ -133,10 +132,11 @@ class VineflowerInvoker(classLoader: ClassLoader) {
         val decompileFuture = CompletableFuture<Unit>()
         val queue = LinkedBlockingQueue<() -> Unit>()
         val canReadOnOwn = ApplicationManager.getApplication().isReadAccessAllowed
+        val project = ProjectLocator.getInstance().guessProjectForFile(file)
 
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
-                doDecompile { readTask ->
+                doDecompile ({ readTask ->
                     val future = CompletableFuture<Unit>()
                     queue.add {
                         try {
@@ -149,10 +149,9 @@ class VineflowerInvoker(classLoader: ClassLoader) {
                         } catch (e: Throwable) {
                             future.completeExceptionally(e)
                         }
-
                     }
                     future.join()
-                }
+                }, project)
 
                 queue.add {
                     decompileFuture.complete(Unit)

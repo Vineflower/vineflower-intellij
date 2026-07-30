@@ -1,3 +1,4 @@
+@file:Suppress("INVISIBLE_MEMBER", "INVISIBLE_REFERENCE")
 package org.vineflower.ijplugin
 
 import com.intellij.openapi.diagnostic.logger
@@ -8,15 +9,20 @@ import com.intellij.psi.PsiManager
 import com.intellij.psi.compiled.ClsStubBuilder
 import com.intellij.psi.stubs.PsiFileStub
 import com.intellij.psi.stubs.PsiFileStubImpl
+import com.intellij.psi.stubs.StubElement
 import com.intellij.util.indexing.FileContent
 import org.jetbrains.kotlin.analysis.decompiler.psi.KotlinDecompiledFileViewProvider
 import org.jetbrains.kotlin.analysis.decompiler.psi.file.KtDecompiledFile
-import org.jetbrains.kotlin.analysis.decompiler.psi.text.DecompiledText
 import org.jetbrains.kotlin.idea.KotlinFileType
 import org.jetbrains.kotlin.idea.KotlinLanguage
 import org.jetbrains.kotlin.psi.KtFile
+import org.jetbrains.kotlin.psi.KtImplementationDetail
 import org.jetbrains.kotlin.psi.stubs.KotlinFileStub
+import org.jetbrains.kotlin.psi.stubs.impl.KotlinFileStubImpl
+import org.jetbrains.kotlin.psi.stubs.KotlinFileStubKind
 import org.jetbrains.kotlin.psi.stubs.KotlinImportDirectiveStub
+import org.jetbrains.kotlin.psi.stubs.KotlinStubElement
+import org.jetbrains.kotlin.psi.stubs.elements.KtFileStubBuilder
 
 class VineflowerDecompilerKotlin : VineflowerDecompilerBase() {
     private val myStubBuilder = StubBuilder()
@@ -30,10 +36,7 @@ class VineflowerDecompilerKotlin : VineflowerDecompilerBase() {
 
     override fun createFileViewProvider(file: VirtualFile, manager: PsiManager, physical: Boolean) =
         KotlinDecompiledFileViewProvider(manager, file, physical) {
-            MyDecompiledFile(it) { f ->
-                val text = getText(f)
-                DecompiledText(text)
-            }
+            MyDecompiledFile(it)
         }
 
     override fun createDecompiledFile(viewProvider: FileViewProvider, contents: ResettableLazy<String>) =
@@ -44,6 +47,7 @@ class VineflowerDecompilerKotlin : VineflowerDecompilerBase() {
 
         override fun getStubVersion() = -1
 
+        @OptIn(KtImplementationDetail::class)
         override fun buildFileStub(content: FileContent): PsiFileStub<*>? {
             try {
                 val text = getText(content.file)
@@ -52,8 +56,9 @@ class VineflowerDecompilerKotlin : VineflowerDecompilerBase() {
                     content.file,
                     true
                 ) { null }
-                val file = MyDecompiledFile(viewProvider) { DecompiledText(text) }
-                return DecompiledPsiStub(file)
+                val file = MyDecompiledFile(viewProvider)
+                val builder = KtFileStubBuilder()
+                return builder.createStubForFile(file) as KotlinFileStubImpl
             } catch (e: ProcessCanceledException) {
                 throw e
             } catch (e: Exception) {
@@ -63,13 +68,7 @@ class VineflowerDecompilerKotlin : VineflowerDecompilerBase() {
         }
     }
 
-    private class DecompiledPsiStub(file: KtDecompiledFile) : PsiFileStubImpl<KtFile>(file), KotlinFileStub {
-        override fun findImportsByAlias(alias: String) = emptyList<KotlinImportDirectiveStub>()
-        override fun getPackageFqName() = psi.packageFqName
-        override fun isScript() = false
-    }
-
-    private class MyDecompiledFile(viewProvider: KotlinDecompiledFileViewProvider, contents: (VirtualFile) -> DecompiledText) : KtDecompiledFile(viewProvider, contents) {
+    private class MyDecompiledFile(viewProvider: KotlinDecompiledFileViewProvider) : KtDecompiledFile(viewProvider) {
         override fun getStub() = stubTree?.root as KotlinFileStub?
 
         override fun toString(): String = super.toString().replace("KtFile", "VfDecompiledFile")
