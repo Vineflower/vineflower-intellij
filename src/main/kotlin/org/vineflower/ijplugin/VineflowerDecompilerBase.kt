@@ -59,6 +59,10 @@ abstract class VineflowerDecompilerBase : ClassFileDecompilers.Full() {
     abstract val sourceFileType: FileType
 
     override fun accepts(file: VirtualFile): Boolean {
+        if (file.extension != "class") {
+            return false
+        }
+
         val state = VineflowerState.getInstance()
         if (!state.enabled || state.hadError) {
             return false
